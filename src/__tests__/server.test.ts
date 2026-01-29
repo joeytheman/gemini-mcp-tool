@@ -1,96 +1,83 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { describe, it, expect, vi, beforeAll } from 'vitest';
 
-// Mock dependencies
+// Track constructor calls manually using plain arrays.
+// vitest's mockReset clears mock.calls between tests, but these arrays persist.
+const serverConstructorCalls: any[][] = [];
+const stdioTransportConstructorCalls: any[][] = [];
+const setRequestHandlerCalls: any[][] = [];
+
+const mockServerInstance = {
+  setRequestHandler: vi.fn((...args: any[]) => {
+    setRequestHandlerCalls.push(args);
+  }),
+  connect: vi.fn().mockResolvedValue(undefined),
+  notification: vi.fn(),
+};
+
 vi.mock('@modelcontextprotocol/sdk/server/index.js', () => ({
-  Server: vi.fn().mockImplementation(() => ({
-    setRequestHandler: vi.fn(),
-    connect: vi.fn(),
-    notification: vi.fn(),
-  })),
+  Server: vi.fn((...args: any[]) => {
+    serverConstructorCalls.push(args);
+    return mockServerInstance;
+  }),
 }));
 
 vi.mock('@modelcontextprotocol/sdk/server/stdio.js', () => ({
-  StdioServerTransport: vi.fn(),
+  StdioServerTransport: vi.fn((...args: any[]) => {
+    stdioTransportConstructorCalls.push(args);
+    return {};
+  }),
+}));
+
+vi.mock('../utils/logger.js', () => ({
+  Logger: {
+    debug: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    log: vi.fn(),
+    toolInvocation: vi.fn(),
+    commandExecution: vi.fn(),
+    commandComplete: vi.fn(),
+  },
 }));
 
 describe('Gemini MCP Server', () => {
-  let consoleErrorSpy: any;
-  let consoleDebugSpy: any;
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    consoleDebugSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-  });
-
-  afterEach(() => {
-    consoleErrorSpy.mockRestore();
-    consoleDebugSpy.mockRestore();
+  beforeAll(async () => {
+    await import('../index.js');
   });
 
   describe('Server Initialization', () => {
     it('should create server with correct name and version', () => {
-      // Import will initialize the server
-      const mockServer = vi.mocked(Server).mock.results[0];
-      expect(Server).toHaveBeenCalled();
+      expect(serverConstructorCalls.length).toBeGreaterThanOrEqual(1);
 
-      const serverConfig = vi.mocked(Server).mock.calls[0][0];
+      const [serverConfig] = serverConstructorCalls[0];
       expect(serverConfig).toHaveProperty('name', 'gemini-cli-mcp');
       expect(serverConfig).toHaveProperty('version');
     });
 
     it('should register capabilities', () => {
-      const serverConfig = vi.mocked(Server).mock.calls[0][1];
-      expect(serverConfig).toHaveProperty('capabilities');
-      expect(serverConfig!.capabilities).toHaveProperty('tools');
-      expect(serverConfig!.capabilities).toHaveProperty('prompts');
+      const [, capabilities] = serverConstructorCalls[0];
+      expect(capabilities).toHaveProperty('capabilities');
+      expect(capabilities.capabilities).toHaveProperty('tools');
+      expect(capabilities.capabilities).toHaveProperty('prompts');
     });
   });
 
   describe('Request Handlers', () => {
-    it('should register ListToolsRequestSchema handler', () => {
-      const mockServerInstance = vi.mocked(Server).mock.results[0].value;
-      expect(mockServerInstance.setRequestHandler).toHaveBeenCalled();
-
-      const calls = mockServerInstance.setRequestHandler.mock.calls;
-      const listToolsHandler = calls.find((call: any) =>
-        call[0]?.name === 'tools/list' || call[0]?.method === 'tools/list'
-      );
-
-      // At minimum, verify handler was registered
-      expect(calls.length).toBeGreaterThan(0);
-    });
-
-    it('should register CallToolRequestSchema handler', () => {
-      const mockServerInstance = vi.mocked(Server).mock.results[0].value;
-      const calls = mockServerInstance.setRequestHandler.mock.calls;
-
-      // Verify multiple handlers were registered
-      expect(calls.length).toBeGreaterThanOrEqual(2);
-    });
-
-    it('should register ListPromptsRequestSchema handler', () => {
-      const mockServerInstance = vi.mocked(Server).mock.results[0].value;
-      const calls = mockServerInstance.setRequestHandler.mock.calls;
-
-      // Verify prompts handler was registered
-      expect(calls.length).toBeGreaterThanOrEqual(3);
+    it('should register at least 4 request handlers', () => {
+      expect(setRequestHandlerCalls.length).toBeGreaterThanOrEqual(4);
     });
   });
 
   describe('Progress Notifications', () => {
     it('should support progress notifications', () => {
-      const mockServerInstance = vi.mocked(Server).mock.results[0].value;
       expect(mockServerInstance).toHaveProperty('notification');
       expect(typeof mockServerInstance.notification).toBe('function');
     });
   });
 
   describe('Transport Connection', () => {
-    it('should connect to StdioServerTransport', () => {
-      expect(StdioServerTransport).toHaveBeenCalled();
+    it('should create StdioServerTransport', () => {
+      expect(stdioTransportConstructorCalls.length).toBeGreaterThanOrEqual(1);
     });
   });
 });
