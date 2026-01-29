@@ -30,16 +30,16 @@
     "ai",
     "llm"
   ],
-  "author": "jamubc",
-  "license": "MIT",
+  "author": "joeytheman",
+  "license": "SEE LICENSE IN LICENSE",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/jamubc/gemini-mcp-tool.git"
+    "url": "git+https://github.com/joeytheman/gemini-mcp-tool.git"
   },
   "bugs": {
-    "url": "https://github.com/jamubc/gemini-mcp-tool/issues"
+    "url": "https://github.com/joeytheman/gemini-mcp-tool/issues"
   },
-  "homepage": "https://github.com/jamubc/gemini-mcp-tool#readme",
+  "homepage": "https://github.com/joeytheman/gemini-mcp-tool#readme",
   "engines": {
     "node": ">=18.0.0"
   },
