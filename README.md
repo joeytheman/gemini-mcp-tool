@@ -30,7 +30,7 @@ This is a simple Model Context Protocol (MCP) server that allows AI assistants t
 
 Before using this tool, ensure you have:
 
-1. **[Node.js](https://nodejs.org/)** (v16.0.0 or higher)
+1. **[Node.js](https://nodejs.org/)** (v18.0.0 or higher)
 2. **[Google Gemini CLI](https://github.com/google-gemini/gemini-cli)** installed and configured
 
 
@@ -95,6 +95,26 @@ If you installed globally, use this configuration instead:
   }
 }
 ```
+
+### Optional: Enable Response Caching
+
+To enable the LRU response cache for near-instant repeated queries, add the `GEMINI_CACHE_ENABLED` environment variable:
+
+```json
+{
+  "mcpServers": {
+    "gemini-cli": {
+      "command": "npx",
+      "args": ["-y", "gemini-mcp-tool"],
+      "env": {
+        "GEMINI_CACHE_ENABLED": "true"
+      }
+    }
+  }
+}
+```
+
+Caching is disabled by default. When enabled, responses are cached with a 30-minute TTL and 10MB max size.
 
 **Configuration File Locations:**
 
@@ -196,7 +216,7 @@ You can use these commands directly in Claude Code's interface (compatibility wi
 
 This MCP server includes several performance optimizations:
 
-- **LRU Response Cache**: Near-instant responses for repeated queries with 30-minute TTL and 10MB max size
+- **LRU Response Cache** (opt-in): Near-instant responses for repeated queries with 30-minute TTL and 10MB max size. Enable via `GEMINI_CACHE_ENABLED=true` env var.
 - **Efficient Command Execution**: O(n) array buffer performance for large outputs
 - **Smart Chunking**: Large changeMode responses are automatically chunked for better handling
 - **Progress Notifications**: Real-time progress updates during long-running operations
