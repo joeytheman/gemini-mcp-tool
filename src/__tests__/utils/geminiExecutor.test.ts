@@ -230,6 +230,19 @@ describe('executeGeminiCLI', () => {
       expect(mockCacheResponse).not.toHaveBeenCalled();
     });
 
+    it('should cache successful fallback responses when cache is enabled', async () => {
+      mockIsCacheEnabled.mockReturnValue(true);
+      mockGetCachedResponse.mockReturnValue(undefined);
+      mockExecuteCommand
+        .mockRejectedValueOnce(new Error(`${ERROR_MESSAGES.QUOTA_EXCEEDED}`))
+        .mockResolvedValueOnce('fallback result');
+
+      const result = await executeGeminiCLI('test', { model: 'gemini-2.5-pro' });
+
+      expect(result).toBe('fallback result');
+      expect(mockCacheResponse).toHaveBeenCalledWith('mock-cache-key', 'fallback result');
+    });
+
     it('should not use cache when disabled', async () => {
       mockIsCacheEnabled.mockReturnValue(false);
 
@@ -324,6 +337,69 @@ new code
     const result = await processChangeModeOutput('ignored', 1, 'cache-key');
     expect(result).toContain('cached.ts');
     expect(result).toContain('Chunk 1 of 2');
+  });
+
+  it('should add summary for cached chunk 1 with >5 edits', async () => {
+    const { getChunks } = await import('../../utils/chunkCache.js');
+    // Create chunk 1 with >5 edits to trigger the summary prepend
+    const manyEdits = Array.from({ length: 6 }, (_, i) => ({
+      filename: `file${i}.ts`,
+      oldStartLine: 1,
+      oldEndLine: 1,
+      oldCode: `old${i}`,
+      newStartLine: 1,
+      newEndLine: 1,
+      newCode: `new${i}`,
+    }));
+    vi.mocked(getChunks).mockReturnValueOnce([
+      {
+        edits: manyEdits,
+        chunkIndex: 1,
+        totalChunks: 2,
+        hasMore: true,
+        estimatedChars: 2000,
+      },
+      {
+        edits: [{
+          filename: 'extra.ts',
+          oldStartLine: 1,
+          oldEndLine: 1,
+          oldCode: 'old',
+          newStartLine: 1,
+          newEndLine: 1,
+          newCode: 'new',
+        }],
+        chunkIndex: 2,
+        totalChunks: 2,
+        hasMore: false,
+        estimatedChars: 200,
+      },
+    ]);
+
+    const result = await processChangeModeOutput('ignored', 1, 'cache-key');
+    expect(result).toContain('ChangeMode Summary');
+    expect(result).toContain('Chunk 1 of 2');
+  });
+
+  it('should cache multi-chunk results and return first chunk with summary', async () => {
+    // Generate >5 edits across enough content to produce multiple chunks
+    const editBlocks = Array.from({ length: 7 }, (_, i) =>
+`**FILE: src/file${i}.ts:1**
+\`\`\`
+OLD:
+${'x'.repeat(3000)}
+NEW:
+${'y'.repeat(3000)}
+\`\`\``
+    ).join('\n\n');
+
+    const result = await processChangeModeOutput(editBlocks, undefined, undefined, 'original prompt');
+
+    // Should contain changeMode output
+    expect(result).toContain('[CHANGEMODE OUTPUT');
+    // With >5 edits, should have summary
+    expect(result).toContain('ChangeMode Summary');
+    expect(result).toContain('Total edits: 7');
   });
 
   it('should process new result when cache misses', async () => {

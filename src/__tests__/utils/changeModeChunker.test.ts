@@ -88,6 +88,38 @@ describe('chunkChangeModeEdits', () => {
     }
   });
 
+  it('should flush partial chunk when a large-file group follows small files', () => {
+    // First: small edits from file A that fit in a chunk
+    // Then: a large-file group from file B that exceeds maxCharsPerChunk
+    // This triggers the flush of the partial chunk (lines 47-51)
+    const edits = [
+      makeEdit('src/small.ts', 100),  // small file, goes into currentChunk
+      makeEdit('src/huge.ts', 8000),   // large file group, should flush previous chunk first
+      makeEdit('src/huge.ts', 8000),   // second edit for the large file
+    ];
+
+    // Set max so that small.ts fits but huge.ts group (2 edits) doesn't
+    const chunks = chunkChangeModeEdits(edits, 5000);
+
+    expect(chunks.length).toBeGreaterThanOrEqual(2);
+
+    // First chunk should contain only the small file edit
+    const smallFileChunks = chunks.filter(c =>
+      c.edits.some(e => e.filename === 'src/small.ts')
+    );
+    const hugeFileChunks = chunks.filter(c =>
+      c.edits.some(e => e.filename === 'src/huge.ts')
+    );
+
+    expect(smallFileChunks.length).toBe(1);
+    expect(hugeFileChunks.length).toBeGreaterThanOrEqual(1);
+
+    // The small file edits should not be mixed with huge file edits
+    for (const chunk of smallFileChunks) {
+      expect(chunk.edits.every(e => e.filename === 'src/small.ts')).toBe(true);
+    }
+  });
+
   it('should set correct chunk metadata', () => {
     const edits = [
       makeEdit('src/a.ts', 5000),
