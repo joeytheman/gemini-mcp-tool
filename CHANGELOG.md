@@ -9,6 +9,11 @@
   - Added `esbuild` override to fix dev server request vulnerability
   - Bumped `vitepress` to ^1.6.4 and `mermaid` to ^11.12.2
   - Bumped minimum Node.js engine from 16 to 18 (required by SDK 1.x)
+- Added LRU response cache for Gemini API responses (opt-in via `GEMINI_CACHE_ENABLED=true` env var)
+- Added extended CLI flags: yolo, approvalMode, outputFormat, debug, includeDirectories, extensions, resume
+- Improved command execution performance with O(n) array buffers
+- Added `buildGeminiArgs()` helper and `GeminiCLIOptions` interface to eliminate code duplication
+- Added vitest test suite with schema validation, registry, and server tests
 
 ## [1.1.3]
 - "gemini reads, claude edits"

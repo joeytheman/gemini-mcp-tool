@@ -4,6 +4,14 @@ import { Logger } from './logger.js';
 import { GeminiCLIOptions } from './geminiExecutor.js';
 
 /**
+ * Whether LRU response caching is enabled.
+ * Opt-in via environment variable GEMINI_CACHE_ENABLED=true.
+ * Defaults to false — users must explicitly enable caching.
+ */
+export const isCacheEnabled = (): boolean =>
+  process.env.GEMINI_CACHE_ENABLED === 'true';
+
+/**
  * LRU Cache for Gemini API responses
  * Caches responses to identical prompts with identical options
  *
@@ -12,6 +20,8 @@ import { GeminiCLIOptions } from './geminiExecutor.js';
  * - Reduces API quota consumption
  * - 30-minute TTL ensures fresh data
  * - 10MB max size prevents memory bloat
+ *
+ * Disabled by default. Enable via GEMINI_CACHE_ENABLED=true env var.
  */
 const responseCache = new LRUCache<string, string>({
   max: 100,  // Cache up to 100 recent responses

@@ -11,7 +11,7 @@ import { parseChangeModeOutput, validateChangeModeEdits } from './changeModePars
 import { formatChangeModeResponse, summarizeChangeModeEdits } from './changeModeTranslator.js';
 import { chunkChangeModeEdits } from './changeModeChunker.js';
 import { cacheChunks, getChunks } from './chunkCache.js';
-import { generateCacheKey, getCachedResponse, cacheResponse } from './responseCache.js';
+import { generateCacheKey, getCachedResponse, cacheResponse, isCacheEnabled } from './responseCache.js';
 
 export interface GeminiCLIOptions {
   model?: string;
@@ -111,7 +111,7 @@ export async function executeGeminiCLI(
   }
 
   // Check cache first for non-changeMode requests (changeMode needs fresh responses)
-  if (!opts.changeMode) {
+  if (isCacheEnabled() && !opts.changeMode) {
     const cacheKey = generateCacheKey(prompt, opts);
     const cached = getCachedResponse(cacheKey);
     if (cached) {
@@ -195,7 +195,7 @@ ${prompt_processed}
     const result = await executeCommand(CLI.COMMANDS.GEMINI, args, onProgress);
 
     // Cache successful non-changeMode responses
-    if (!opts.changeMode) {
+    if (isCacheEnabled() && !opts.changeMode) {
       const cacheKey = generateCacheKey(prompt, opts);
       cacheResponse(cacheKey, result);
     }
@@ -216,7 +216,7 @@ ${prompt_processed}
         await sendStatusMessage(STATUS_MESSAGES.FLASH_SUCCESS);
 
         // Cache successful fallback response (non-changeMode only)
-        if (!opts.changeMode) {
+        if (isCacheEnabled() && !opts.changeMode) {
           const cacheKey = generateCacheKey(prompt, opts);
           cacheResponse(cacheKey, result);
         }
