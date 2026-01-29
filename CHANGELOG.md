@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 - Updated default model to `gemini-3-pro-preview`
+- Added MCP tool annotations to all 6 tools per [MCP specification](https://spec.modelcontextprotocol.io/specification/2025-03-26/server/tools/#annotations) (`readOnlyHint`, `openWorldHint`, `idempotentHint`)
 
 ## [1.1.3]
 - "gemini reads, claude edits"
