@@ -44,8 +44,8 @@ describe('Gemini MCP Server', () => {
     it('should register capabilities', () => {
       const serverConfig = vi.mocked(Server).mock.calls[0][1];
       expect(serverConfig).toHaveProperty('capabilities');
-      expect(serverConfig.capabilities).toHaveProperty('tools');
-      expect(serverConfig.capabilities).toHaveProperty('prompts');
+      expect(serverConfig!.capabilities).toHaveProperty('tools');
+      expect(serverConfig!.capabilities).toHaveProperty('prompts');
     });
   });
 
