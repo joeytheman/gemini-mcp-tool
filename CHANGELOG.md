@@ -1,19 +1,19 @@
 # Changelog
 
 ## [Unreleased]
-- Updated default model to `gemini-3-pro-preview`
-- Added MCP tool annotations to all 6 tools per [MCP specification](https://spec.modelcontextprotocol.io/specification/2025-03-26/server/tools/#annotations) (`readOnlyHint`, `openWorldHint`, `idempotentHint`)
+- Updated default model to `gemini-3-pro-preview` [PR #54](https://github.com/jamubc/gemini-mcp-tool/pull/54)
+- Added MCP tool annotations to all 6 tools per [MCP specification](https://spec.modelcontextprotocol.io/specification/2025-03-26/server/tools/#annotations) (`readOnlyHint`, `openWorldHint`, `idempotentHint`) [PR #46](https://github.com/jamubc/gemini-mcp-tool/pull/46)
 - Resolved npm audit vulnerabilities (14 → 7 remaining, all dev-only `lodash-es` with no fix available)
   - Upgraded `@modelcontextprotocol/sdk` from 0.5.x to 1.25.x (high severity)
   - Removed unused `ai` dependency and its transitive `jsondiffpatch` vulnerability
   - Added `esbuild` override to fix dev server request vulnerability
   - Bumped `vitepress` to ^1.6.4 and `mermaid` to ^11.12.2
   - Bumped minimum Node.js engine from 16 to 18 (required by SDK 1.x)
-- Added LRU response cache for Gemini API responses (opt-in via `GEMINI_CACHE_ENABLED=true` env var)
-- Added extended CLI flags: yolo, approvalMode, outputFormat, debug, includeDirectories, extensions, resume
-- Improved command execution performance with O(n) array buffers
-- Added `buildGeminiArgs()` helper and `GeminiCLIOptions` interface to eliminate code duplication
-- Added vitest test suite with schema validation, registry, and server tests
+- Added LRU response cache for Gemini API responses (opt-in via `GEMINI_CACHE_ENABLED=true` env var) [PR #44](https://github.com/jamubc/gemini-mcp-tool/pull/44)
+- Added extended CLI flags: yolo, approvalMode, outputFormat, debug, includeDirectories, extensions, resume [PR #44](https://github.com/jamubc/gemini-mcp-tool/pull/44)
+- Improved command execution performance with O(n) array buffers [PR #44](https://github.com/jamubc/gemini-mcp-tool/pull/44)
+- Added `buildGeminiArgs()` helper and `GeminiCLIOptions` interface to eliminate code duplication [PR #44](https://github.com/jamubc/gemini-mcp-tool/pull/44)
+- Added vitest test suite with schema validation, registry, and server tests [PR #44](https://github.com/jamubc/gemini-mcp-tool/pull/44)
 
 ## [1.1.3]
 - "gemini reads, claude edits"
