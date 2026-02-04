@@ -14,6 +14,9 @@
 - Improved command execution performance with O(n) array buffers [PR #44](https://github.com/jamubc/gemini-mcp-tool/pull/44)
 - Added `buildGeminiArgs()` helper and `GeminiCLIOptions` interface to eliminate code duplication [PR #44](https://github.com/jamubc/gemini-mcp-tool/pull/44)
 - Added vitest test suite with schema validation, registry, and server tests [PR #44](https://github.com/jamubc/gemini-mcp-tool/pull/44)
+- Fixed Windows compatibility: `shell: true` on win32 for `.cmd` executables [PR #43](https://github.com/jamubc/gemini-mcp-tool/pull/43)
+- Replaced deprecated `-p` flag with positional prompt for Gemini CLI v0.18+ [PR #43](https://github.com/jamubc/gemini-mcp-tool/pull/43)
+- Added `workingDirectory` parameter to ask-gemini for cross-drive access on Windows [PR #43](https://github.com/jamubc/gemini-mcp-tool/pull/43)
 
 ## [1.1.3]
 - "gemini reads, claude edits"
