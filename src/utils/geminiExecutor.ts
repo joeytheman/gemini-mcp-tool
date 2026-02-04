@@ -87,12 +87,8 @@ function buildGeminiArgs(opts: GeminiCLIOptions, prompt: string, forceModel?: st
     args.push(CLI.FLAGS.PROMPT_INTERACTIVE, opts.promptInteractive);
   }
 
-  // Ensure @ symbols work cross-platform by wrapping in quotes if needed
-  const finalPrompt = prompt.includes('@') && !prompt.startsWith('"')
-    ? `"${prompt}"`
-    : prompt;
-
-  args.push(CLI.FLAGS.PROMPT, finalPrompt);
+  // Use positional prompt (not -p flag which is deprecated in Gemini CLI v0.18+)
+  args.push(prompt);
 
   return args;
 }
