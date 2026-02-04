@@ -13,6 +13,7 @@ const askGeminiArgsSchema = z.object({
   changeMode: z.boolean().default(false).describe("Enable structured change mode - formats prompts to prevent tool errors and returns structured edit suggestions that Claude can apply directly"),
   chunkIndex: z.union([z.number(), z.string()]).optional().describe("Which chunk to return (1-based)"),
   chunkCacheKey: z.string().optional().describe("Optional cache key for continuation"),
+  workingDirectory: z.string().optional().describe("Working directory to run Gemini from. Use drive root (e.g., 'C:/' or 'D:/') to access files on that drive."),
 
   // Phase 1: Critical flags
   yolo: z.boolean().default(false).describe("Auto-accept all actions (YOLO mode). Automatically approves all confirmations without prompting. Use with caution in automated workflows."),
@@ -42,7 +43,7 @@ export const askGeminiTool: UnifiedTool = {
   },
   execute: async (args, onProgress) => {
     const {
-      prompt, model, sandbox, changeMode, chunkIndex, chunkCacheKey,
+      prompt, model, sandbox, changeMode, chunkIndex, chunkCacheKey, workingDirectory,
       yolo, approvalMode, outputFormat, includeDirectories, debug,
       promptInteractive, extensions, resume
     } = args; if (!prompt?.trim()) { throw new Error(ERROR_MESSAGES.NO_PROMPT_PROVIDED); }
@@ -70,6 +71,7 @@ export const askGeminiTool: UnifiedTool = {
         promptInteractive: promptInteractive as string | undefined,
         extensions: extensions,
         resume: resume as string | undefined,
+        cwd: workingDirectory as string | undefined,
       },
       onProgress
     );

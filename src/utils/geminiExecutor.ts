@@ -25,6 +25,7 @@ export interface GeminiCLIOptions {
   promptInteractive?: string;
   extensions?: string | string[];
   resume?: string;
+  cwd?: string;
 }
 
 /**
@@ -188,7 +189,7 @@ ${prompt_processed}
   const args = buildGeminiArgs(opts, prompt_processed);
 
   try {
-    const result = await executeCommand(CLI.COMMANDS.GEMINI, args, onProgress);
+    const result = await executeCommand(CLI.COMMANDS.GEMINI, args, onProgress, opts.cwd);
 
     // Cache successful non-changeMode responses
     if (isCacheEnabled() && !opts.changeMode) {
@@ -207,7 +208,7 @@ ${prompt_processed}
       const fallbackArgs = buildGeminiArgs(opts, prompt_processed, MODELS.FLASH);
 
       try {
-        const result = await executeCommand(CLI.COMMANDS.GEMINI, fallbackArgs, onProgress);
+        const result = await executeCommand(CLI.COMMANDS.GEMINI, fallbackArgs, onProgress, opts.cwd);
         Logger.warn(`Successfully executed with ${MODELS.FLASH} fallback.`);
         await sendStatusMessage(STATUS_MESSAGES.FLASH_SUCCESS);
 

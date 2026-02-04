@@ -126,20 +126,19 @@ describe('executeGeminiCLI', () => {
       expect(args).toContain('latest');
     });
 
-    it('should quote prompt containing @ symbols', async () => {
+    it('should pass prompt as positional argument', async () => {
       await executeGeminiCLI('analyze @file.ts', {});
 
       const args = mockExecuteCommand.mock.calls[0][1];
-      const promptArg = args[args.indexOf(CLI.FLAGS.PROMPT) + 1];
-      expect(promptArg).toBe('"analyze @file.ts"');
+      expect(args[args.length - 1]).toBe('analyze @file.ts');
+      expect(args).not.toContain(CLI.FLAGS.PROMPT);
     });
 
-    it('should not double-quote already quoted prompt', async () => {
-      await executeGeminiCLI('"analyze @file.ts"', {});
+    it('should pass cwd when specified', async () => {
+      await executeGeminiCLI('test', { cwd: '/some/path' });
 
-      const args = mockExecuteCommand.mock.calls[0][1];
-      const promptArg = args[args.indexOf(CLI.FLAGS.PROMPT) + 1];
-      expect(promptArg).toBe('"analyze @file.ts"');
+      const cwd = mockExecuteCommand.mock.calls[0][3];
+      expect(cwd).toBe('/some/path');
     });
 
     it('should handle string options for backward compatibility', async () => {
