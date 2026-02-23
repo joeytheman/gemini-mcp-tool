@@ -124,6 +124,7 @@ const brainstormArgsSchema = z.object({
   existingContext: z.string().optional().describe("Background information, previous attempts, or current state to build upon"),
   ideaCount: z.number().int().positive().default(12).describe("Target number of ideas to generate (default: 10-15)"),
   includeAnalysis: z.boolean().default(true).describe("Include feasibility, impact, and implementation analysis for generated ideas"),
+  workingDirectory: z.string().optional().describe("Working directory to run Gemini from."),
 });
 
 export const brainstormTool: UnifiedTool = {
@@ -148,7 +149,8 @@ export const brainstormTool: UnifiedTool = {
       constraints,
       existingContext,
       ideaCount = 12,
-      includeAnalysis = true
+      includeAnalysis = true,
+      workingDirectory
     } = args;
 
     if (!prompt?.trim()) {
@@ -177,6 +179,7 @@ export const brainstormTool: UnifiedTool = {
         model: model as string | undefined,
         sandbox: false,
         changeMode: false,
+        cwd: workingDirectory as string | undefined,
       },
       onProgress
     );

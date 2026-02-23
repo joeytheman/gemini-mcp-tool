@@ -88,7 +88,9 @@ function buildGeminiArgs(opts: GeminiCLIOptions, prompt: string, forceModel?: st
     args.push(CLI.FLAGS.PROMPT_INTERACTIVE, opts.promptInteractive);
   }
 
-  // Use positional prompt (not -p flag which is deprecated in Gemini CLI v0.18+)
+  // Use positional prompt (not -p flag which is deprecated in Gemini CLI v0.18+).
+  // @ symbols are safe here: with spawn(cmd, argsArray, {shell: true}),
+  // Node.js auto-quotes each arg for cmd.exe, and @ is not a cmd.exe metacharacter.
   args.push(prompt);
 
   return args;
