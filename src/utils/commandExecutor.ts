@@ -54,7 +54,7 @@ export async function executeCommand(
             details: {
               model: model,
               reason: reason,
-              statusText: "Too Many Requests -- > try using gemini-2.5-flash by asking",
+              statusText: "Too Many Requests -- > try using gemini-3-flash-preview by asking",
             }
           }
         };

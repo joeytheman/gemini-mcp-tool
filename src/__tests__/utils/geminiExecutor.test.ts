@@ -50,11 +50,11 @@ describe('executeGeminiCLI', () => {
 
   describe('argument building', () => {
     it('should add model flag when specified', async () => {
-      await executeGeminiCLI('test', { model: 'gemini-2.5-flash' });
+      await executeGeminiCLI('test', { model: 'gemini-3-flash-preview' });
 
       const args = mockExecuteCommand.mock.calls[0][1];
       expect(args).toContain(CLI.FLAGS.MODEL);
-      expect(args).toContain('gemini-2.5-flash');
+      expect(args).toContain('gemini-3-flash-preview');
     });
 
     it('should add sandbox flag when specified', async () => {
@@ -142,11 +142,11 @@ describe('executeGeminiCLI', () => {
     });
 
     it('should handle string options for backward compatibility', async () => {
-      await executeGeminiCLI('test', 'gemini-2.5-flash');
+      await executeGeminiCLI('test', 'gemini-3-flash-preview');
 
       const args = mockExecuteCommand.mock.calls[0][1];
       expect(args).toContain(CLI.FLAGS.MODEL);
-      expect(args).toContain('gemini-2.5-flash');
+      expect(args).toContain('gemini-3-flash-preview');
     });
   });
 

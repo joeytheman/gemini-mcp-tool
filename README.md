@@ -161,7 +161,7 @@ These tools are designed to be used by the AI assistant.
 
 - **`ask-gemini`**: Execute Gemini CLI with full feature support including advanced flags, caching, and change mode.
   - **`prompt`** (required): The analysis request. Use the `@` syntax to include file or directory references (e.g., `@src/main.js explain this code`) or ask general questions (e.g., `Please use a web search to find the latest news stories`).
-  - **`model`** (optional): The Gemini model to use. Defaults to `gemini-3-pro-preview`. Use `gemini-2.5-flash` for faster responses.
+  - **`model`** (optional): The Gemini model to use. Defaults to `gemini-3-pro-preview`. Use `gemini-3-flash-preview` for faster responses.
   - **`sandbox`** (optional): Set to `true` to run in sandbox mode for safe code execution.
   - **`changeMode`** (optional): Enable structured change mode for edit suggestions that Claude can apply directly.
   - **`yolo`** (optional): Auto-accept all actions (YOLO mode). Use with caution.
