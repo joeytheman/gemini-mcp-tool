@@ -17,7 +17,7 @@ No installation needed - runs directly:
   "mcpServers": {
     "gemini-cli": {
       "command": "npx",
-      "args": ["-y", "gemini-mcp-tool"]
+      "args": ["-y", "@joeytheman/gemini-mcp-tool"]
     }
   }
 }
@@ -26,7 +26,7 @@ No installation needed - runs directly:
 ## Method 2: Global Installation
 
 ```bash
-claude mcp add gemini-cli -- npx -y gemini-mcp-tool
+claude mcp add gemini-cli -- npx -y @joeytheman/gemini-mcp-tool
 ```
 
 Then configure:
@@ -43,7 +43,7 @@ Then configure:
 ## Method 3: Local Project
 
 ```bash
-npm install gemini-mcp-tool
+npm install @joeytheman/gemini-mcp-tool
 ```
 
 See [Getting Started](/getting-started) for full setup instructions.

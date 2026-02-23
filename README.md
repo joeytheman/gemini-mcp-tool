@@ -4,8 +4,8 @@
 <div align="center">
 
 [![GitHub Release](https://img.shields.io/github/v/release/joeytheman/gemini-mcp-tool?logo=github&label=GitHub)](https://github.com/joeytheman/gemini-mcp-tool/releases)
-[![npm version](https://img.shields.io/npm/v/gemini-mcp-tool)](https://www.npmjs.com/package/gemini-mcp-tool)
-[![npm downloads](https://img.shields.io/npm/dt/gemini-mcp-tool)](https://www.npmjs.com/package/gemini-mcp-tool)
+[![npm version](https://img.shields.io/npm/v/@joeytheman/gemini-mcp-tool)](https://www.npmjs.com/package/@joeytheman/gemini-mcp-tool)
+[![npm downloads](https://img.shields.io/npm/dt/@joeytheman/gemini-mcp-tool)](https://www.npmjs.com/package/@joeytheman/gemini-mcp-tool)
 [![License: MIT Non-Commercial](https://img.shields.io/badge/License-MIT%20Non--Commercial-blue.svg)](./LICENSE)
 [![Open Source](https://img.shields.io/badge/Open%20Source-❤️-red.svg)](https://github.com/joeytheman/gemini-mcp-tool)
 
@@ -39,7 +39,7 @@ Before using this tool, ensure you have:
 ### One-Line Setup
 
 ```bash
-claude mcp add gemini-cli -- npx -y gemini-mcp-tool
+claude mcp add gemini-cli -- npx -y @joeytheman/gemini-mcp-tool
 ```
 
 ### Verify Installation
@@ -56,7 +56,7 @@ If you already have it configured in Claude Desktop:
 ```json
 "gemini-cli": {
   "command": "npx",
-  "args": ["-y", "gemini-mcp-tool"]
+  "args": ["-y", "@joeytheman/gemini-mcp-tool"]
 }
 ```
 
@@ -78,7 +78,7 @@ Add this configuration to your Claude Desktop config file:
   "mcpServers": {
     "gemini-cli": {
       "command": "npx",
-      "args": ["-y", "gemini-mcp-tool"]
+      "args": ["-y", "@joeytheman/gemini-mcp-tool"]
     }
   }
 }
@@ -107,7 +107,7 @@ To enable the LRU response cache for near-instant repeated queries, add the `GEM
   "mcpServers": {
     "gemini-cli": {
       "command": "npx",
-      "args": ["-y", "gemini-mcp-tool"],
+      "args": ["-y", "@joeytheman/gemini-mcp-tool"],
       "env": {
         "GEMINI_CACHE_ENABLED": "true"
       }
@@ -172,6 +172,7 @@ These tools are designed to be used by the AI assistant.
   - **`promptInteractive`** (optional): Execute prompt and continue in interactive mode.
   - **`extensions`** (optional): Filter specific file extensions.
   - **`resume`** (optional): Resume previous session (use `latest` or session number).
+  - **`workingDirectory`** (optional): Working directory to run Gemini from. Use drive root (e.g., 'C:/' or 'D:/') on Windows to access files across drives.
 
 - **`brainstorm`**: Generate creative ideas with structured methodologies and domain context.
   - **`prompt`** (required): Brainstorming challenge or question to explore.

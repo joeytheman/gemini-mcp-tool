@@ -38,7 +38,7 @@ If you still get "command not found", restart your terminal or add npm global bi
 
 ```bash
 # Method 1: Install globally first
-npm install -g gemini-mcp-tool
+npm install -g @joeytheman/gemini-mcp-tool
 claude mcp add gemini-cli -- gemini-mcp-tool
 
 # Method 2: Use --yes instead of -y
@@ -162,8 +162,8 @@ node --version
 gemini "Hello"
 
 # 3. Reinstall if needed
-npm uninstall -g gemini-mcp-tool
-npm install -g gemini-mcp-tool
+npm uninstall -g @joeytheman/gemini-mcp-tool
+npm install -g @joeytheman/gemini-mcp-tool
 
 # 4. Verify Claude Code can find the command
 claude mcp list
@@ -285,7 +285,7 @@ Enable debug logging:
 
 ## Getting Help
 
-1. Check [GitHub Issues](https://github.com/jamubc/gemini-mcp-tool/issues)
+1. Check [GitHub Issues](https://github.com/joeytheman/gemini-mcp-tool/issues)
 2. Enable debug mode
 3. Collect error logs
 4. Open a new issue with details
@@ -316,8 +316,8 @@ Enable debug logging:
 ### Reset Everything
 ```bash
 # Remove and reinstall
-npm uninstall -g gemini-mcp-tool
-npm install -g gemini-mcp-tool
+npm uninstall -g @joeytheman/gemini-mcp-tool
+npm install -g @joeytheman/gemini-mcp-tool
 
 # Reset Gemini CLI
 gemini config reset
