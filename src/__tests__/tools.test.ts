@@ -23,7 +23,7 @@ describe('Tool Registry', () => {
       const brainstormTool = tools.find(t => t.name === 'brainstorm');
 
       expect(brainstormTool).toBeDefined();
-      expect(brainstormTool?.description).toBeTruthy();
+      expect(brainstormTool?.description).toContain('Generate novel ideas');
     });
 
     it('should include ping tool', () => {

@@ -156,4 +156,34 @@ describe('executeCommand', () => {
       stdio: ['ignore', 'pipe', 'pipe'],
     });
   });
+
+  it('should pass cwd to spawn when provided', async () => {
+    const mockProc = createMockChildProcess();
+    mockSpawn.mockReturnValue(mockProc);
+
+    const promise = executeCommand('gemini', ['-p', 'test'], undefined, '/some/dir');
+
+    mockProc.emit('close', 0);
+    await promise;
+
+    expect(mockSpawn).toHaveBeenCalledWith('gemini', ['-p', 'test'], {
+      env: process.env,
+      shell: false,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      cwd: '/some/dir',
+    });
+  });
+
+  it('should not include cwd in spawn options when undefined', async () => {
+    const mockProc = createMockChildProcess();
+    mockSpawn.mockReturnValue(mockProc);
+
+    const promise = executeCommand('gemini', ['-p', 'test']);
+
+    mockProc.emit('close', 0);
+    await promise;
+
+    const spawnOptions = mockSpawn.mock.calls[0][2];
+    expect(spawnOptions).not.toHaveProperty('cwd');
+  });
 });
