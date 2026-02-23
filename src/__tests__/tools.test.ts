@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { toolRegistry, getToolDefinitions, toolExists, getPromptDefinitions } from '../tools/registry.js';
+import { toolRegistry, getToolDefinitions, toolExists, getPromptDefinitions } from '../tools/index.js';
 
 describe('Tool Registry', () => {
   describe('getToolDefinitions', () => {
@@ -23,7 +23,7 @@ describe('Tool Registry', () => {
       const brainstormTool = tools.find(t => t.name === 'brainstorm');
 
       expect(brainstormTool).toBeDefined();
-      expect(brainstormTool?.description).toContain('brainstorm');
+      expect(brainstormTool?.description).toContain('Generate novel ideas');
     });
 
     it('should include ping tool', () => {

@@ -3,22 +3,24 @@
 
 <div align="center">
 
-[![GitHub Release](https://img.shields.io/github/v/release/jamubc/gemini-mcp-tool?logo=github&label=GitHub)](https://github.com/jamubc/gemini-mcp-tool/releases)
-[![npm version](https://img.shields.io/npm/v/gemini-mcp-tool)](https://www.npmjs.com/package/gemini-mcp-tool)
-[![npm downloads](https://img.shields.io/npm/dt/gemini-mcp-tool)](https://www.npmjs.com/package/gemini-mcp-tool)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-[![Open Source](https://img.shields.io/badge/Open%20Source-❤️-red.svg)](https://github.com/jamubc/gemini-mcp-tool)
+[![GitHub Release](https://img.shields.io/github/v/release/joeytheman/gemini-mcp-tool?logo=github&label=GitHub)](https://github.com/joeytheman/gemini-mcp-tool/releases)
+[![npm version](https://img.shields.io/npm/v/@joeytheman/gemini-mcp-tool)](https://www.npmjs.com/package/@joeytheman/gemini-mcp-tool)
+[![npm downloads](https://img.shields.io/npm/dt/@joeytheman/gemini-mcp-tool)](https://www.npmjs.com/package/@joeytheman/gemini-mcp-tool)
+[![License: MIT Non-Commercial](https://img.shields.io/badge/License-MIT%20Non--Commercial-blue.svg)](./LICENSE)
+[![Open Source](https://img.shields.io/badge/Open%20Source-❤️-red.svg)](https://github.com/joeytheman/gemini-mcp-tool)
 
 </div>
 
-> 📚 **[View Full Documentation](https://jamubc.github.io/gemini-mcp-tool/)** - Search me!, Examples, FAQ, Troubleshooting, Best Practices
+> 📚 **[View Full Documentation](https://joeytheman.github.io/gemini-mcp-tool/)** - Search me!, Examples, FAQ, Troubleshooting, Best Practices
+
+> **Fork Notice:** This project is a fork of [jamubc/gemini-mcp-tool](https://github.com/jamubc/gemini-mcp-tool), originally created by [jamubc](https://github.com/jamubc). We are grateful to the original author for their foundational work.
 
 This is a simple Model Context Protocol (MCP) server that allows AI assistants to interact with the [Gemini CLI](https://github.com/google-gemini/gemini-cli). It enables the AI to leverage the power of Gemini's massive token window for large analysis, especially with large files and codebases using the `@` syntax for direction.
 
 - Ask gemini natural questions, through claude or Brainstorm new ideas in a party of 3!
 
-<a href="https://glama.ai/mcp/servers/@jamubc/gemini-mcp-tool">
-  <img width="380" height="200" src="https://glama.ai/mcp/servers/@jamubc/gemini-mcp-tool/badge" alt="Gemini Tool MCP server" />
+<a href="https://glama.ai/mcp/servers/@joeytheman/gemini-mcp-tool">
+  <img width="380" height="200" src="https://glama.ai/mcp/servers/@joeytheman/gemini-mcp-tool/badge" alt="Gemini Tool MCP server" />
 </a>
 
 ## TLDR: [![Claude](https://img.shields.io/badge/Claude-D97757?logo=claude&logoColor=fff)](#) + [![Google Gemini](https://img.shields.io/badge/Google%20Gemini-886FBF?logo=googlegemini&logoColor=fff)](#)
@@ -37,7 +39,7 @@ Before using this tool, ensure you have:
 ### One-Line Setup
 
 ```bash
-claude mcp add gemini-cli -- npx -y gemini-mcp-tool
+claude mcp add gemini-cli -- npx -y @joeytheman/gemini-mcp-tool
 ```
 
 ### Verify Installation
@@ -54,7 +56,7 @@ If you already have it configured in Claude Desktop:
 ```json
 "gemini-cli": {
   "command": "npx",
-  "args": ["-y", "gemini-mcp-tool"]
+  "args": ["-y", "@joeytheman/gemini-mcp-tool"]
 }
 ```
 
@@ -76,7 +78,7 @@ Add this configuration to your Claude Desktop config file:
   "mcpServers": {
     "gemini-cli": {
       "command": "npx",
-      "args": ["-y", "gemini-mcp-tool"]
+      "args": ["-y", "@joeytheman/gemini-mcp-tool"]
     }
   }
 }
@@ -105,7 +107,7 @@ To enable the LRU response cache for near-instant repeated queries, add the `GEM
   "mcpServers": {
     "gemini-cli": {
       "command": "npx",
-      "args": ["-y", "gemini-mcp-tool"],
+      "args": ["-y", "@joeytheman/gemini-mcp-tool"],
       "env": {
         "GEMINI_CACHE_ENABLED": "true"
       }
@@ -159,7 +161,7 @@ These tools are designed to be used by the AI assistant.
 
 - **`ask-gemini`**: Execute Gemini CLI with full feature support including advanced flags, caching, and change mode.
   - **`prompt`** (required): The analysis request. Use the `@` syntax to include file or directory references (e.g., `@src/main.js explain this code`) or ask general questions (e.g., `Please use a web search to find the latest news stories`).
-  - **`model`** (optional): The Gemini model to use. Defaults to `gemini-3-pro-preview`. Use `gemini-2.5-flash` for faster responses.
+  - **`model`** (optional): The Gemini model to use. Defaults to `gemini-3-pro-preview`. Use `gemini-3-flash-preview` for faster responses.
   - **`sandbox`** (optional): Set to `true` to run in sandbox mode for safe code execution.
   - **`changeMode`** (optional): Enable structured change mode for edit suggestions that Claude can apply directly.
   - **`yolo`** (optional): Auto-accept all actions (YOLO mode). Use with caution.
@@ -170,6 +172,7 @@ These tools are designed to be used by the AI assistant.
   - **`promptInteractive`** (optional): Execute prompt and continue in interactive mode.
   - **`extensions`** (optional): Filter specific file extensions.
   - **`resume`** (optional): Resume previous session (use `latest` or session number).
+  - **`workingDirectory`** (optional): Working directory to run Gemini from. Use drive root (e.g., 'C:/' or 'D:/') on Windows to access files across drives.
 
 - **`brainstorm`**: Generate creative ideas with structured methodologies and domain context.
   - **`prompt`** (required): Brainstorming challenge or question to explore.
@@ -225,8 +228,12 @@ This MCP server includes several performance optimizations:
 
 Contributions are welcome! Please see our [Contributing Guidelines](CONTRIBUTING.md) for details on how to submit pull requests, report issues, and contribute to the project.
 
+## Acknowledgments
+
+This project was originally created by [jamubc](https://github.com/jamubc) and is maintained as a fork by [joeytheman](https://github.com/joeytheman). The original repository can be found at [jamubc/gemini-mcp-tool](https://github.com/jamubc/gemini-mcp-tool).
+
 ## License
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License (Non-Commercial). Commercial use is prohibited without prior written permission from the original copyright holder. See the [LICENSE](LICENSE) file for full details.
 
 **Disclaimer:** This is an unofficial, third-party tool and is not affiliated with, endorsed, or sponsored by Google.

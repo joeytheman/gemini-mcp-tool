@@ -25,6 +25,7 @@ export interface GeminiCLIOptions {
   promptInteractive?: string;
   extensions?: string | string[];
   resume?: string;
+  cwd?: string;
 }
 
 /**
@@ -87,12 +88,10 @@ function buildGeminiArgs(opts: GeminiCLIOptions, prompt: string, forceModel?: st
     args.push(CLI.FLAGS.PROMPT_INTERACTIVE, opts.promptInteractive);
   }
 
-  // Ensure @ symbols work cross-platform by wrapping in quotes if needed
-  const finalPrompt = prompt.includes('@') && !prompt.startsWith('"')
-    ? `"${prompt}"`
-    : prompt;
-
-  args.push(CLI.FLAGS.PROMPT, finalPrompt);
+  // Use positional prompt (not -p flag which is deprecated in Gemini CLI v0.18+).
+  // @ symbols are safe here: with spawn(cmd, argsArray, {shell: true}),
+  // Node.js auto-quotes each arg for cmd.exe, and @ is not a cmd.exe metacharacter.
+  args.push(prompt);
 
   return args;
 }
@@ -192,7 +191,7 @@ ${prompt_processed}
   const args = buildGeminiArgs(opts, prompt_processed);
 
   try {
-    const result = await executeCommand(CLI.COMMANDS.GEMINI, args, onProgress);
+    const result = await executeCommand(CLI.COMMANDS.GEMINI, args, onProgress, opts.cwd);
 
     // Cache successful non-changeMode responses
     if (isCacheEnabled() && !opts.changeMode) {
@@ -211,7 +210,7 @@ ${prompt_processed}
       const fallbackArgs = buildGeminiArgs(opts, prompt_processed, MODELS.FLASH);
 
       try {
-        const result = await executeCommand(CLI.COMMANDS.GEMINI, fallbackArgs, onProgress);
+        const result = await executeCommand(CLI.COMMANDS.GEMINI, fallbackArgs, onProgress, opts.cwd);
         Logger.warn(`Successfully executed with ${MODELS.FLASH} fallback.`);
         await sendStatusMessage(STATUS_MESSAGES.FLASH_SUCCESS);
 

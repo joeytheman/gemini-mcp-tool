@@ -117,13 +117,14 @@ ${domain ? `Given the ${domain} domain, I'll apply the most effective combinatio
 
 const brainstormArgsSchema = z.object({
   prompt: z.string().min(1).describe("Primary brainstorming challenge or question to explore"),
-  model: z.string().optional().describe("Optional model to use (e.g., 'gemini-2.5-flash'). If not specified, uses the default model (gemini-3-pro-preview)."),
+  model: z.string().optional().describe("Optional model to use (e.g., 'gemini-3-flash-preview'). If not specified, uses the default model (gemini-3.1-pro-preview)."),
   methodology: z.enum(['divergent', 'convergent', 'scamper', 'design-thinking', 'lateral', 'auto']).default('auto').describe("Brainstorming framework: 'divergent' (generate many ideas), 'convergent' (refine existing), 'scamper' (systematic triggers), 'design-thinking' (human-centered), 'lateral' (unexpected connections), 'auto' (AI selects best)"),
   domain: z.string().optional().describe("Domain context for specialized brainstorming (e.g., 'software', 'business', 'creative', 'research', 'product', 'marketing')"),
   constraints: z.string().optional().describe("Known limitations, requirements, or boundaries (budget, time, technical, legal, etc.)"),
   existingContext: z.string().optional().describe("Background information, previous attempts, or current state to build upon"),
   ideaCount: z.number().int().positive().default(12).describe("Target number of ideas to generate (default: 10-15)"),
   includeAnalysis: z.boolean().default(true).describe("Include feasibility, impact, and implementation analysis for generated ideas"),
+  workingDirectory: z.string().optional().describe("Working directory to run Gemini from."),
 });
 
 export const brainstormTool: UnifiedTool = {
@@ -148,7 +149,8 @@ export const brainstormTool: UnifiedTool = {
       constraints,
       existingContext,
       ideaCount = 12,
-      includeAnalysis = true
+      includeAnalysis = true,
+      workingDirectory
     } = args;
 
     if (!prompt?.trim()) {
@@ -177,6 +179,7 @@ export const brainstormTool: UnifiedTool = {
         model: model as string | undefined,
         sandbox: false,
         changeMode: false,
+        cwd: workingDirectory as string | undefined,
       },
       onProgress
     );

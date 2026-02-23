@@ -4,7 +4,8 @@ import { Logger } from "./logger.js";
 export async function executeCommand(
   command: string,
   args: string[],
-  onProgress?: (newOutput: string) => void
+  onProgress?: (newOutput: string) => void,
+  cwd?: string
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     const startTime = Date.now();
@@ -12,8 +13,9 @@ export async function executeCommand(
 
     const childProcess = spawn(command, args, {
       env: process.env,
-      shell: false,
+      shell: process.platform === "win32",
       stdio: ["ignore", "pipe", "pipe"],
+      ...(cwd && { cwd }),
     });
 
     // Use array buffers for O(n) performance instead of O(n²) string concatenation
@@ -52,7 +54,7 @@ export async function executeCommand(
             details: {
               model: model,
               reason: reason,
-              statusText: "Too Many Requests -- > try using gemini-2.5-flash by asking",
+              statusText: "Too Many Requests -- > try using gemini-3-flash-preview by asking",
             }
           }
         };

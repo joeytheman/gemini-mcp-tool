@@ -30,7 +30,7 @@ describe('ask-gemini Tool', () => {
     it('should accept all optional flags', () => {
       const result = askGeminiArgsSchema.parse({
         prompt: 'test prompt',
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3-flash-preview',
         sandbox: true,
         changeMode: true,
         yolo: true,
@@ -39,7 +39,7 @@ describe('ask-gemini Tool', () => {
         debug: true,
       });
 
-      expect(result.model).toBe('gemini-2.5-flash');
+      expect(result.model).toBe('gemini-3-flash-preview');
       expect(result.sandbox).toBe(true);
       expect(result.changeMode).toBe(true);
       expect(result.yolo).toBe(true);

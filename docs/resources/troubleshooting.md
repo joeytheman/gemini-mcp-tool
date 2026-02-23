@@ -38,7 +38,7 @@ If you still get "command not found", restart your terminal or add npm global bi
 
 ```bash
 # Method 1: Install globally first
-npm install -g gemini-mcp-tool
+npm install -g @joeytheman/gemini-mcp-tool
 claude mcp add gemini-cli -- gemini-mcp-tool
 
 # Method 2: Use --yes instead of -y
@@ -121,7 +121,7 @@ claude mcp add gemini-cli -- npx gemini-mcp-tool
 
 2. **Switch to Gemini Flash for faster responses**:
    ```bash
-   gemini config set model gemini-2.5-flash
+   gemini config set model gemini-3-flash-preview
    ```
 
 3. **Break up large requests into smaller chunks**:
@@ -162,8 +162,8 @@ node --version
 gemini "Hello"
 
 # 3. Reinstall if needed
-npm uninstall -g gemini-mcp-tool
-npm install -g gemini-mcp-tool
+npm uninstall -g @joeytheman/gemini-mcp-tool
+npm install -g @joeytheman/gemini-mcp-tool
 
 # 4. Verify Claude Code can find the command
 claude mcp list
@@ -191,7 +191,7 @@ claude mcp list
 # "🧠 Gemini is analyzing your request..."
 
 # Use faster Flash model for large requests
-/gemini-cli:analyze -m gemini-2.5-flash @large-file.js
+/gemini-cli:analyze -m gemini-3-flash-preview @large-file.js
 
 # Break up large analysis into smaller chunks
 /gemini-cli:analyze @specific-function.js explain this function
@@ -210,17 +210,17 @@ claude mcp list
 **Root cause**: Model-specific bug in `gemini-3-pro-preview` (default model)
 
 **Working models**:
-- ✅ `gemini-2.5-flash` - Works perfectly
+- ✅ `gemini-3-flash-preview` - Works perfectly
 - ❌ `gemini-3-pro-preview` - Always returns 45k+ tokens
 - ❌ `gemini-2.0-flash-thinking` - Model not found
 
 **Solutions**:
 ```bash
 # Use Flash model (recommended)
-/gemini-cli:analyze -m gemini-2.5-flash "your prompt"
+/gemini-cli:analyze -m gemini-3-flash-preview "your prompt"
 
 # For large contexts, break into smaller chunks
-/gemini-cli:analyze -m gemini-2.5-flash @file1.js @file2.js
+/gemini-cli:analyze -m gemini-3-flash-preview @file1.js @file2.js
 
 # Alternative: Use Pro for larger contexts when it works
 /gemini-cli:analyze -m gemini-3-pro-preview "brief analysis only"
@@ -264,7 +264,7 @@ echo $GOOGLE_GENERATIVE_AI_API_KEY
 **For very large codebases** (10,000+ files):
 - Consider breaking analysis into smaller chunks
 - Use more specific file patterns with `@` syntax
-- Switch to `gemini-2.5-flash` for faster processing
+- Switch to `gemini-3-flash-preview` for faster processing
 ```
 
 ## Debug Mode
@@ -285,7 +285,7 @@ Enable debug logging:
 
 ## Getting Help
 
-1. Check [GitHub Issues](https://github.com/jamubc/gemini-mcp-tool/issues)
+1. Check [GitHub Issues](https://github.com/joeytheman/gemini-mcp-tool/issues)
 2. Enable debug mode
 3. Collect error logs
 4. Open a new issue with details
@@ -300,24 +300,24 @@ Enable debug logging:
 
 **Workaround**: Use Gemini Flash instead
 ```bash
-/gemini-cli:analyze -m gemini-2.5-flash "your prompt"
+/gemini-cli:analyze -m gemini-3-flash-preview "your prompt"
 ```
 
 ### Model Recommendations
 | **Use Case** | **Recommended Model** | **Reason** |
 |--------------|----------------------|------------|
-| File analysis | `gemini-2.5-flash` | Faster, stable responses |
-| Code review | `gemini-2.5-flash` | Good balance of speed/quality |
-| Large codebase | `gemini-2.5-flash` | Better timeout handling |
-| Quick questions | `gemini-2.5-flash` | Fast responses |
+| File analysis | `gemini-3-flash-preview` | Faster, stable responses |
+| Code review | `gemini-3-flash-preview` | Good balance of speed/quality |
+| Large codebase | `gemini-3-flash-preview` | Better timeout handling |
+| Quick questions | `gemini-3-flash-preview` | Fast responses |
 
 ## Quick Fixes
 
 ### Reset Everything
 ```bash
 # Remove and reinstall
-npm uninstall -g gemini-mcp-tool
-npm install -g gemini-mcp-tool
+npm uninstall -g @joeytheman/gemini-mcp-tool
+npm install -g @joeytheman/gemini-mcp-tool
 
 # Reset Gemini CLI
 gemini config reset
@@ -333,7 +333,7 @@ gemini "Hello"
 /gemini-cli:ping
 
 # Test file analysis with working model
-/gemini-cli:analyze -m gemini-2.5-flash @README.md summarize
+/gemini-cli:analyze -m gemini-3-flash-preview @README.md summarize
 ```
 
 ## Platform-Specific Issues
