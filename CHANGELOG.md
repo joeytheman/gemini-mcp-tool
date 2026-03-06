@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+- Cleaned up stale model documentation: removed obsolete 45k token bug references, Flash-8B, flash-thinking, and hardcoded token counts; balanced model recommendations between Pro and Flash
 - Updated Flash fallback model from `gemini-3-flash-preview` to `gemini-3.1-flash-lite-preview` (2.5x faster TTFT, 45% faster output, $0.25/1M input)
 - Replaced hardcoded model string in `commandExecutor.ts` with `MODELS.FLASH` constant
 - Updated default model to `gemini-3-pro-preview` [PR #54](https://github.com/jamubc/gemini-mcp-tool/pull/54)

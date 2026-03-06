@@ -44,7 +44,7 @@ It's how you reference files for analysis:
 - *new:* `file:index.html` now works, fully bypassing @ integration
 
 ### Can I analyze multiple files? What about ALL the files?
-Yes! Gemini's 1M token context allows analyzing entire codebases.
+Yes! Gemini's large context window allows analyzing entire codebases.
 
 ### Which model should I use?
 - **Daily work**: Gemini Pro

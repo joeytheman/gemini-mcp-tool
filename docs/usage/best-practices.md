@@ -50,9 +50,8 @@ Include configuration with implementation:
 ## Token Management
 
 ### Gemini Model Selection
-- **Quick tasks**: Use Flash (1M tokens)
-- **Full analysis**: Use Pro (2M tokens)
-- **Simple queries**: Use Flash-8B
+- **Quick tasks**: Use `gemini-3.1-flash-lite-preview`
+- **Full analysis**: Use `gemini-3.1-pro-preview`
 
 ### Efficient File Inclusion
 ```bash

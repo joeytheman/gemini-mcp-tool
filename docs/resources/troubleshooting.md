@@ -204,26 +204,17 @@ claude mcp list
 - Check file permissions
 - Verify working directory
 
-### "Token limit exceeded" / "Response exceeds maximum allowed tokens (25000)"
-**Problem**: Error shows response of 45,735 tokens even for small prompts
-
-**Root cause**: Model-specific bug in `gemini-3.1-pro-preview` (default model)
-
-**Working models**:
-- ✅ `gemini-3.1-flash-lite-preview` - Works perfectly
-- ❌ `gemini-3.1-pro-preview` - Always returns 45k+ tokens
-- ❌ `gemini-2.0-flash-thinking` - Model not found
+### "Token limit exceeded" / "Response exceeds maximum allowed tokens"
+**Problem**: Response exceeds the maximum allowed token limit
 
 **Solutions**:
 ```bash
-# Use Flash model (recommended)
+# Use Flash for faster, shorter responses
 /gemini-cli:analyze -m gemini-3.1-flash-lite-preview "your prompt"
 
-# For large contexts, break into smaller chunks
-/gemini-cli:analyze -m gemini-3.1-flash-lite-preview @file1.js @file2.js
-
-# Alternative: Use Pro for larger contexts when it works
-/gemini-cli:analyze -m gemini-3.1-pro-preview "brief analysis only"
+# Break large requests into smaller, focused chunks
+/gemini-cli:analyze @file1.js "explain the main function"
+/gemini-cli:analyze @file2.js "explain the error handling"
 ```
 
 ## Configuration Issues
@@ -290,26 +281,14 @@ Enable debug logging:
 3. Collect error logs
 4. Open a new issue with details
 
-## Model-Specific Issues
+## Model Recommendations
 
-### Gemini-3-Pro-Preview Issues
-**Known problems**:
-- Always returns 45,735 token responses (bug)
-- May cause "response exceeds limit" errors
-- Not recommended for file analysis
-
-**Workaround**: Use Gemini Flash instead
-```bash
-/gemini-cli:analyze -m gemini-3.1-flash-lite-preview "your prompt"
-```
-
-### Model Recommendations
 | **Use Case** | **Recommended Model** | **Reason** |
 |--------------|----------------------|------------|
-| File analysis | `gemini-3.1-flash-lite-preview` | Faster, stable responses |
-| Code review | `gemini-3.1-flash-lite-preview` | Good balance of speed/quality |
-| Large codebase | `gemini-3.1-flash-lite-preview` | Better timeout handling |
-| Quick questions | `gemini-3.1-flash-lite-preview` | Fast responses |
+| Complex analysis | `gemini-3.1-pro-preview` | Stronger reasoning |
+| Architecture review | `gemini-3.1-pro-preview` | Better for large codebases |
+| Quick tasks | `gemini-3.1-flash-lite-preview` | Fastest responses |
+| Code review | `gemini-3.1-flash-lite-preview` | Good speed/quality balance |
 
 ## Quick Fixes
 
