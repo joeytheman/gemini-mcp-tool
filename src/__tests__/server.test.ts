@@ -14,19 +14,21 @@ const mockServerInstance = {
   notification: vi.fn(),
 };
 
-vi.mock('@modelcontextprotocol/sdk/server/index.js', () => ({
-  Server: vi.fn((...args: any[]) => {
+vi.mock('@modelcontextprotocol/sdk/server/index.js', () => {
+  const ServerMock = vi.fn(function (this: any, ...args: any[]) {
     serverConstructorCalls.push(args);
-    return mockServerInstance;
-  }),
-}));
+    Object.assign(this, mockServerInstance);
+  }) as any;
+  ServerMock.prototype = mockServerInstance;
+  return { Server: ServerMock };
+});
 
-vi.mock('@modelcontextprotocol/sdk/server/stdio.js', () => ({
-  StdioServerTransport: vi.fn((...args: any[]) => {
+vi.mock('@modelcontextprotocol/sdk/server/stdio.js', () => {
+  const StdioMock = vi.fn(function (this: any, ...args: any[]) {
     stdioTransportConstructorCalls.push(args);
-    return {};
-  }),
-}));
+  }) as any;
+  return { StdioServerTransport: StdioMock };
+});
 
 vi.mock('../utils/logger.js', () => ({
   Logger: {

@@ -171,7 +171,7 @@ describe('ask-gemini Tool', () => {
         askGeminiArgsSchema.parse({});
       } catch (error: any) {
         expect(error.issues[0].path).toContain('prompt');
-        expect(error.issues[0].message).toMatch(/required/i);
+        expect(error.issues[0].message).toMatch(/required|expected string/i);
       }
     });
 
@@ -180,7 +180,7 @@ describe('ask-gemini Tool', () => {
         askGeminiArgsSchema.parse({ prompt: '' });
       } catch (error: any) {
         expect(error.issues[0].path).toContain('prompt');
-        expect(error.issues[0].message).toMatch(/at least 1/i);
+        expect(error.issues[0].message).toMatch(/at least 1|>=1/i);
       }
     });
   });
