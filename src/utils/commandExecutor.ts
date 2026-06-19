@@ -1,5 +1,6 @@
 import { spawn } from "child_process";
 import { Logger } from "./logger.js";
+import { MODELS } from "../constants.js";
 
 export async function executeCommand(
   command: string,
@@ -54,7 +55,7 @@ export async function executeCommand(
             details: {
               model: model,
               reason: reason,
-              statusText: "Too Many Requests -- > try using gemini-3-flash-preview by asking",
+              statusText: `Too Many Requests -- > try using ${MODELS.FLASH} by asking`,
             }
           }
         };

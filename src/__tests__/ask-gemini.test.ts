@@ -30,7 +30,7 @@ describe('ask-gemini Tool', () => {
     it('should accept all optional flags', () => {
       const result = askGeminiArgsSchema.parse({
         prompt: 'test prompt',
-        model: 'gemini-3-flash-preview',
+        model: 'gemini-3.1-flash-lite-preview',
         sandbox: true,
         changeMode: true,
         yolo: true,
@@ -39,7 +39,7 @@ describe('ask-gemini Tool', () => {
         debug: true,
       });
 
-      expect(result.model).toBe('gemini-3-flash-preview');
+      expect(result.model).toBe('gemini-3.1-flash-lite-preview');
       expect(result.sandbox).toBe(true);
       expect(result.changeMode).toBe(true);
       expect(result.yolo).toBe(true);
@@ -171,7 +171,7 @@ describe('ask-gemini Tool', () => {
         askGeminiArgsSchema.parse({});
       } catch (error: any) {
         expect(error.issues[0].path).toContain('prompt');
-        expect(error.issues[0].message).toMatch(/required/i);
+        expect(error.issues[0].message).toMatch(/required|expected string/i);
       }
     });
 
@@ -180,7 +180,7 @@ describe('ask-gemini Tool', () => {
         askGeminiArgsSchema.parse({ prompt: '' });
       } catch (error: any) {
         expect(error.issues[0].path).toContain('prompt');
-        expect(error.issues[0].message).toMatch(/at least 1/i);
+        expect(error.issues[0].message).toMatch(/at least 1|>=1/i);
       }
     });
   });

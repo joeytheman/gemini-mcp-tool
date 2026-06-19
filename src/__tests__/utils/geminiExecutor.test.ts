@@ -50,11 +50,11 @@ describe('executeGeminiCLI', () => {
 
   describe('argument building', () => {
     it('should add model flag when specified', async () => {
-      await executeGeminiCLI('test', { model: 'gemini-3-flash-preview' });
+      await executeGeminiCLI('test', { model: 'gemini-3.1-flash-lite-preview' });
 
       const args = mockExecuteCommand.mock.calls[0][1];
       expect(args).toContain(CLI.FLAGS.MODEL);
-      expect(args).toContain('gemini-3-flash-preview');
+      expect(args).toContain('gemini-3.1-flash-lite-preview');
     });
 
     it('should add sandbox flag when specified', async () => {
@@ -142,11 +142,11 @@ describe('executeGeminiCLI', () => {
     });
 
     it('should handle string options for backward compatibility', async () => {
-      await executeGeminiCLI('test', 'gemini-3-flash-preview');
+      await executeGeminiCLI('test', 'gemini-3.1-flash-lite-preview');
 
       const args = mockExecuteCommand.mock.calls[0][1];
       expect(args).toContain(CLI.FLAGS.MODEL);
-      expect(args).toContain('gemini-3-flash-preview');
+      expect(args).toContain('gemini-3.1-flash-lite-preview');
     });
   });
 
@@ -156,7 +156,7 @@ describe('executeGeminiCLI', () => {
         .mockRejectedValueOnce(new Error(`Command failed: ${ERROR_MESSAGES.QUOTA_EXCEEDED}`))
         .mockResolvedValueOnce('Flash response');
 
-      const result = await executeGeminiCLI('test', { model: 'gemini-2.5-pro' });
+      const result = await executeGeminiCLI('test', { model: 'gemini-3.1-pro-preview' });
 
       expect(result).toBe('Flash response');
       expect(mockExecuteCommand).toHaveBeenCalledTimes(2);
@@ -183,7 +183,7 @@ describe('executeGeminiCLI', () => {
         .mockRejectedValueOnce(new Error('Flash also failed'));
 
       await expect(
-        executeGeminiCLI('test', { model: 'gemini-2.5-pro' })
+        executeGeminiCLI('test', { model: 'gemini-3.1-pro-preview' })
       ).rejects.toThrow('fallback also failed');
     });
 
@@ -236,7 +236,7 @@ describe('executeGeminiCLI', () => {
         .mockRejectedValueOnce(new Error(`${ERROR_MESSAGES.QUOTA_EXCEEDED}`))
         .mockResolvedValueOnce('fallback result');
 
-      const result = await executeGeminiCLI('test', { model: 'gemini-2.5-pro' });
+      const result = await executeGeminiCLI('test', { model: 'gemini-3.1-pro-preview' });
 
       expect(result).toBe('fallback result');
       expect(mockCacheResponse).toHaveBeenCalledWith('mock-cache-key', 'fallback result');

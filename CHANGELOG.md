@@ -1,6 +1,9 @@
 # Changelog
 
 ## [Unreleased]
+- Cleaned up stale model documentation: removed obsolete 45k token bug references, Flash-8B, flash-thinking, and hardcoded token counts; balanced model recommendations between Pro and Flash
+- Updated Flash fallback model from `gemini-3-flash-preview` to `gemini-3.1-flash-lite-preview` (2.5x faster TTFT, 45% faster output, $0.25/1M input)
+- Replaced hardcoded model string in `commandExecutor.ts` with `MODELS.FLASH` constant
 - Updated default model to `gemini-3-pro-preview` [PR #54](https://github.com/jamubc/gemini-mcp-tool/pull/54)
 - Added MCP tool annotations to all 6 tools per [MCP specification](https://spec.modelcontextprotocol.io/specification/2025-03-26/server/tools/#annotations) (`readOnlyHint`, `openWorldHint`, `idempotentHint`) [PR #46](https://github.com/jamubc/gemini-mcp-tool/pull/46)
 - Resolved npm audit vulnerabilities (14 → 7 remaining, all dev-only `lodash-es` with no fix available)

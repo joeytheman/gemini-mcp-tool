@@ -121,7 +121,7 @@ claude mcp add gemini-cli -- npx gemini-mcp-tool
 
 2. **Switch to Gemini Flash for faster responses**:
    ```bash
-   gemini config set model gemini-3-flash-preview
+   gemini config set model gemini-3.1-flash-lite-preview
    ```
 
 3. **Break up large requests into smaller chunks**:
@@ -191,7 +191,7 @@ claude mcp list
 # "🧠 Gemini is analyzing your request..."
 
 # Use faster Flash model for large requests
-/gemini-cli:analyze -m gemini-3-flash-preview @large-file.js
+/gemini-cli:analyze -m gemini-3.1-flash-lite-preview @large-file.js
 
 # Break up large analysis into smaller chunks
 /gemini-cli:analyze @specific-function.js explain this function
@@ -204,26 +204,17 @@ claude mcp list
 - Check file permissions
 - Verify working directory
 
-### "Token limit exceeded" / "Response exceeds maximum allowed tokens (25000)"
-**Problem**: Error shows response of 45,735 tokens even for small prompts
-
-**Root cause**: Model-specific bug in `gemini-3-pro-preview` (default model)
-
-**Working models**:
-- ✅ `gemini-3-flash-preview` - Works perfectly
-- ❌ `gemini-3-pro-preview` - Always returns 45k+ tokens
-- ❌ `gemini-2.0-flash-thinking` - Model not found
+### "Token limit exceeded" / "Response exceeds maximum allowed tokens"
+**Problem**: Response exceeds the maximum allowed token limit
 
 **Solutions**:
 ```bash
-# Use Flash model (recommended)
-/gemini-cli:analyze -m gemini-3-flash-preview "your prompt"
+# Use Flash for faster, shorter responses
+/gemini-cli:analyze -m gemini-3.1-flash-lite-preview "your prompt"
 
-# For large contexts, break into smaller chunks
-/gemini-cli:analyze -m gemini-3-flash-preview @file1.js @file2.js
-
-# Alternative: Use Pro for larger contexts when it works
-/gemini-cli:analyze -m gemini-3-pro-preview "brief analysis only"
+# Break large requests into smaller, focused chunks
+/gemini-cli:analyze @file1.js "explain the main function"
+/gemini-cli:analyze @file2.js "explain the error handling"
 ```
 
 ## Configuration Issues
@@ -264,7 +255,7 @@ echo $GOOGLE_GENERATIVE_AI_API_KEY
 **For very large codebases** (10,000+ files):
 - Consider breaking analysis into smaller chunks
 - Use more specific file patterns with `@` syntax
-- Switch to `gemini-3-flash-preview` for faster processing
+- Switch to `gemini-3.1-flash-lite-preview` for faster processing
 ```
 
 ## Debug Mode
@@ -290,26 +281,14 @@ Enable debug logging:
 3. Collect error logs
 4. Open a new issue with details
 
-## Model-Specific Issues
+## Model Recommendations
 
-### Gemini-3-Pro-Preview Issues
-**Known problems**:
-- Always returns 45,735 token responses (bug)
-- May cause "response exceeds limit" errors
-- Not recommended for file analysis
-
-**Workaround**: Use Gemini Flash instead
-```bash
-/gemini-cli:analyze -m gemini-3-flash-preview "your prompt"
-```
-
-### Model Recommendations
 | **Use Case** | **Recommended Model** | **Reason** |
 |--------------|----------------------|------------|
-| File analysis | `gemini-3-flash-preview` | Faster, stable responses |
-| Code review | `gemini-3-flash-preview` | Good balance of speed/quality |
-| Large codebase | `gemini-3-flash-preview` | Better timeout handling |
-| Quick questions | `gemini-3-flash-preview` | Fast responses |
+| Complex analysis | `gemini-3.1-pro-preview` | Stronger reasoning |
+| Architecture review | `gemini-3.1-pro-preview` | Better for large codebases |
+| Quick tasks | `gemini-3.1-flash-lite-preview` | Fastest responses |
+| Code review | `gemini-3.1-flash-lite-preview` | Good speed/quality balance |
 
 ## Quick Fixes
 
@@ -333,7 +312,7 @@ gemini "Hello"
 /gemini-cli:ping
 
 # Test file analysis with working model
-/gemini-cli:analyze -m gemini-3-flash-preview @README.md summarize
+/gemini-cli:analyze -m gemini-3.1-flash-lite-preview @README.md summarize
 ```
 
 ## Platform-Specific Issues

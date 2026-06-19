@@ -52,23 +52,22 @@
     "@modelcontextprotocol/sdk": "^1.25.3",
     "chalk": "^5.0.0",
     "d3-shape": "^3.2.0",
-    "inquirer": "^9.0.0",
+    "inquirer": "^13.3.0",
     "lru-cache": "^11.2.4",
     "prismjs": "^1.30.0",
-    "zod": "^3.25.76",
-    "zod-to-json-schema": "^3.24.6"
+    "zod": "^4.3.6"
   },
   "devDependencies": {
-    "@types/inquirer": "^9.0.0",
-    "@types/node": "^20.0.0",
-    "@vitest/coverage-v8": "^2.1.8",
+    "@types/inquirer": "^9.0.9",
+    "@types/node": "^25.3.3",
+    "@vitest/coverage-v8": "^4.0.18",
     "archiver": "^7.0.1",
     "mermaid": "^11.12.2",
     "tsx": "^4.0.0",
     "typescript": "^5.0.0",
     "vitepress": "^1.6.4",
     "vitepress-plugin-mermaid": "^2.0.17",
-    "vitest": "^2.1.8"
+    "vitest": "^4.0.18"
   },
   "publishConfig": {
     "access": "public"
