@@ -23,14 +23,24 @@ This is a simple Model Context Protocol (MCP) server that lets AI assistants ask
   <img width="380" height="200" src="https://glama.ai/mcp/servers/@joeytheman/gemini-mcp-tool/badge" alt="Gemini Tool MCP server" />
 </a>
 
-## TLDR: [![Claude](https://img.shields.io/badge/Claude-D97757?logo=claude&logoColor=fff)](#) + [![Google Gemini](https://img.shields.io/badge/Google%20Gemini-886FBF?logo=googlegemini&logoColor=fff)](#)
+## TLDR: [![Claude](https://img.shields.io/badge/Claude-D97757?logo=claude&logoColor=fff)](#) + [![Google Gemini](https://img.shields.io/badge/Google%20Gemini-886FBF?logo=googlegemini&logoColor=fff)](#) + [![Antigravity (agy)](https://img.shields.io/badge/Antigravity%20%28agy%29-4285F4?logo=google&logoColor=fff)](#)
 
 
 **Goal**: Use Gemini's analysis capabilities directly from Codex or Claude Code for reviews, critiques, and large-file questions.
 
-## Migration Note
+## What's New in 2.0
 
-Gemini is now reached through Antigravity CLI (`agy`). The retired Gemini CLI/API path is no longer used, and there is no old Pro-to-Flash quota fallback. Legacy Gemini CLI flags such as `outputFormat`, `extensions`, `debug`, and `approvalMode:auto_edit` now return explicit unsupported-option errors.
+Version 2.0 moves the Gemini backend from the retired Gemini CLI/API path to Google's **Antigravity CLI (`agy`)** and brings the MCP-facing `ask-gemini` workflow along with several capabilities:
+
+- **Antigravity backend** — Gemini is reached through `agy --print`. The default model is **Gemini 3.5 Flash (Medium)**, with verified Low / Medium / High Flash tiers.
+- **Opt-in response caching** — LRU cache (30-minute TTL, 10 MB max) for repeated queries, enabled with `AGY_CACHE_ENABLED=true`.
+- **Conversation resume** — continue the latest `agy` conversation or resume a specific one via the `resume` option (`--continue` / `--conversation <id>`).
+- **Extra workspace directories** — add directories to the Antigravity workspace with `includeDirectories` (maps to repeated `--add-dir`).
+- **Configurable print timeout** — bound long-running calls with `printTimeout` (for example `5m` or `90s`; maps to `--print-timeout`).
+- **Working directory control** — run `agy` from a chosen directory (or a drive root on Windows) via `workingDirectory`, supported by both `ask-gemini` and `brainstorm`.
+- **Structured change mode** — `OLD/NEW` edit suggestions Claude can apply directly, with automatic chunking and a `fetch-chunk` tool for large edit sets.
+
+**Removed:** there is no longer a Pro→Flash quota fallback, and legacy Gemini CLI flags (`outputFormat`, `extensions`, `debug`, `promptInteractive`, and `approvalMode` other than `yolo`) now return explicit unsupported-option errors.
 
 ## Prerequisites
 
@@ -189,8 +199,10 @@ These tools are designed to be used by the AI assistant.
   - **`methodology`** (optional): Framework to use: `divergent`, `convergent`, `scamper`, `design-thinking`, `lateral`, or `auto` (default).
   - **`domain`** (optional): Domain context (e.g., 'software', 'business', 'creative', 'research').
   - **`constraints`** (optional): Known limitations or requirements.
+  - **`existingContext`** (optional): Background information, previous attempts, or current state to build upon.
   - **`ideaCount`** (optional): Number of ideas to generate (default: 12).
   - **`includeAnalysis`** (optional): Include feasibility and impact analysis (default: true).
+  - **`workingDirectory`** (optional): Working directory to run `agy` from.
 
 - **`fetch-chunk`**: Retrieve cached chunks from large changeMode responses.
   - **`cacheKey`** (required): Cache key from initial changeMode response.
@@ -214,6 +226,7 @@ You can use these commands directly in Claude Code's interface (compatibility wi
 - **/brainstorm**: Generate structured ideas with creative methodologies.
   - **Example**: `/brainstorm prompt:How can we improve user onboarding? methodology:design-thinking domain:software`
   - **Quick use**: `/brainstorm prompt:Ideas for a mobile app feature`
+  - **Supported flags**: model, methodology, domain, constraints, existingContext, ideaCount, includeAnalysis, workingDirectory.
 
 - **/fetch-chunk**: Retrieve next chunk of a large changeMode response.
   - **Example**: `/fetch-chunk cacheKey:abc123 chunkIndex:2`
