@@ -4,47 +4,46 @@ Complete list of available commands and their usage.
 
 ## Slash Commands
 
-### `/gemini-cli:analyze`
+### `/ask-gemini`
 Analyze files or ask questions about code.
 
 ```
-/gemini-cli:analyze @file.js explain this code
-/gemini-cli:analyze @src/*.ts find security issues
-/gemini-cli:analyze how do I implement authentication?
+/ask-gemini prompt:@file.js explain this code
+/ask-gemini prompt:@src/*.ts find security issues
+/ask-gemini prompt:how do I implement authentication?
 ```
 
-### `/gemini-cli:sandbox`
+### `/ask-gemini` with `sandbox:true`
 Execute code in a safe environment.
 
 ```
-/gemini-cli:sandbox create a Python fibonacci generator
-/gemini-cli:sandbox test this function: [code]
+/ask-gemini prompt:create a Python fibonacci generator sandbox:true
+/ask-gemini prompt:test this function: [code] sandbox:true
 ```
 
-### `/gemini-cli:help`
+### `/Help`
 Show help information and available tools.
 
 ```
-/gemini-cli:help
-/gemini-cli:help analyze
+/Help
 ```
 
-### `/gemini-cli:ping`
+### `/ping`
 Test connectivity with Gemini.
 
 ```
-/gemini-cli:ping
-/gemini-cli:ping "Custom message"
+/ping
+/ping "Custom message"
 ```
 
 ## Command Structure
 
 ```
-/gemini-cli:<tool> [options] <arguments>
+/ask-gemini prompt:<request> [options]
 ```
 
-- **tool**: The action to perform (analyze, sandbox, help, ping)
-- **options**: Optional flags (coming soon)
+- **tool**: The MCP tool to call
+- **options**: Optional arguments such as `model`, `sandbox`, `includeDirectories`, `printTimeout`, and `resume`
 - **arguments**: Input text, files, or questions
 
 ## Natural Language Alternative
@@ -86,17 +85,17 @@ Instead of slash commands, you can use natural language:
 
 ### Combining Files and Questions
 ```
-/gemini-cli:analyze @package.json @src/index.js is the entry point configured correctly?
+/ask-gemini prompt:@package.json @src/index.js is the entry point configured correctly?
 ```
 
 ### Complex Queries
 ```
-/gemini-cli:analyze @src/**/*.js @test/**/*.test.js what's the test coverage?
+/ask-gemini prompt:@src/**/*.js @test/**/*.test.js what's the test coverage?
 ```
 
 ### Code Generation
 ```
-/gemini-cli:analyze @models/user.js generate TypeScript types for this model
+/ask-gemini prompt:@models/user.js generate TypeScript types for this model
 ```
 
 ## Tips

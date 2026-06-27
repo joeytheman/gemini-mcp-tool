@@ -1,6 +1,5 @@
 import { spawn } from "child_process";
 import { Logger } from "./logger.js";
-import { MODELS } from "../constants.js";
 
 export async function executeCommand(
   command: string,
@@ -14,7 +13,7 @@ export async function executeCommand(
 
     const childProcess = spawn(command, args, {
       env: process.env,
-      shell: process.platform === "win32",
+      shell: false,
       stdio: ["ignore", "pipe", "pipe"],
       ...(cwd && { cwd }),
     });
@@ -39,7 +38,7 @@ export async function executeCommand(
     childProcess.stderr.on("data", (data) => {
       const chunk = data.toString();
       stderrChunks.push(chunk);
-      // find RESOURCE_EXHAUSTED when Gemini Pro quota is exceeded
+      // Surface resource/quota failures from the backend without attempting fallback.
       if (chunk.includes("RESOURCE_EXHAUSTED")) {
         const stderrSoFar = stderrChunks.join('');
         const modelMatch = stderrSoFar.match(/Quota exceeded for quota metric '([^']+)'/);
@@ -55,11 +54,11 @@ export async function executeCommand(
             details: {
               model: model,
               reason: reason,
-              statusText: `Too Many Requests -- > try using ${MODELS.FLASH} by asking`,
+              statusText: `Too Many Requests from Antigravity CLI backend`,
             }
           }
         };
-        Logger.error(`Gemini Quota Error: ${JSON.stringify(errorJson, null, 2)}`);
+        Logger.error(`Antigravity resource error: ${JSON.stringify(errorJson, null, 2)}`);
       }
     });
     childProcess.on("error", (error) => {

@@ -2,6 +2,8 @@
 
 Common issues and their solutions. Click any issue below to see the detailed solution.
 
+This MCP server now asks Gemini through Antigravity CLI (`agy`). The retired Gemini CLI/API path is not used.
+
 <script setup>
 import TroubleshootingModal from '../.vitepress/components/TroubleshootingModal.vue'
 </script>
@@ -9,21 +11,22 @@ import TroubleshootingModal from '../.vitepress/components/TroubleshootingModal.
 ## Installation Issues
 
 <TroubleshootingModal 
-  title='"Command not found: gemini"'
-  preview="The Gemini CLI is not installed or not in your PATH"
+  title='"Antigravity CLI (`agy`) was not found"'
+  preview="Antigravity CLI is not installed or not in your PATH"
 >
 
-The Gemini CLI is not installed. Install it first:
+Antigravity CLI is not installed or is not on your PATH. Configure it first:
 ```bash
-npm install -g @google/gemini-cli
+agy install
 ```
 
 After installation, verify it works:
 ```bash
-gemini --version
+agy --version
+agy models
 ```
 
-If you still get "command not found", restart your terminal or add npm global bin to your PATH.
+If you still get "command not found", restart your terminal and verify the directory containing `agy` is on your PATH.
 
 </TroubleshootingModal>
 
@@ -39,13 +42,13 @@ If you still get "command not found", restart your terminal or add npm global bi
 ```bash
 # Method 1: Install globally first
 npm install -g @joeytheman/gemini-mcp-tool
-claude mcp add gemini-cli -- gemini-mcp-tool
+claude mcp add gemini-feedback -- gemini-mcp
 
 # Method 2: Use --yes instead of -y
-claude mcp add gemini-cli -- npx --yes gemini-mcp-tool
+claude mcp add gemini-feedback -- npx --yes @joeytheman/gemini-mcp-tool
 
 # Method 3: Remove the -y flag entirely
-claude mcp add gemini-cli -- npx gemini-mcp-tool
+claude mcp add gemini-feedback -- npx @joeytheman/gemini-mcp-tool
 ```
 
 </TroubleshootingModal>
@@ -80,19 +83,20 @@ claude mcp add gemini-cli -- npx gemini-mcp-tool
 
 <TroubleshootingModal 
   title='"Failed to connect to Gemini"'
-  preview="API connection issues or authentication problems"
+  preview="Antigravity CLI connection or authentication problems"
 >
 
 **Step-by-step solution**:
 
-1. **Verify your API key is configured**:
+1. **Verify Antigravity CLI works outside the MCP server**:
    ```bash
-   gemini config get api_key
+   agy --version
+   agy models
    ```
 
 2. **Check your internet connection**
    - Try accessing google.com in your browser
-   - Test with a simple request: `gemini "test"`
+   - Test with a simple request: `agy --model "Gemini 3.5 Flash (Medium)" --print "test"`
 
 3. **Verify firewall settings**
    - Ensure your firewall isn't blocking requests to Google APIs
@@ -100,13 +104,13 @@ claude mcp add gemini-cli -- npx gemini-mcp-tool
 
 4. **Test basic connectivity**:
    ```bash
-   /gemini-cli:ping "test"
+   /ping "test"
    ```
 
-5. **If still failing, regenerate your API key**
-   - Go to [Google AI Studio](https://aistudio.google.com/app/apikey)
-   - Create a new API key
-   - Update your config: `gemini config set api_key YOUR_NEW_KEY`
+5. **If still failing, re-run Antigravity setup**
+   ```bash
+   agy install
+   ```
 
 </TroubleshootingModal>
 
@@ -119,18 +123,18 @@ claude mcp add gemini-cli -- npx gemini-mcp-tool
 
 1. **Large files naturally take time** - Be patient with large file analysis
 
-2. **Switch to Gemini Flash for faster responses**:
+2. **Use a faster Gemini Flash tier**:
    ```bash
-   gemini config set model gemini-3.1-flash-lite-preview
+   /ask-gemini prompt:"quick review this change" model:"Gemini 3.5 Flash (Low)"
    ```
 
 3. **Break up large requests into smaller chunks**:
    ```bash
    # Instead of analyzing entire file
-   /gemini-cli:analyze @large-file.js "explain the main function"
+   /ask-gemini prompt:@large-file.js explain the main function
    
    # Target specific sections
-   /gemini-cli:analyze @large-file.js "explain lines 50-100"
+   /ask-gemini prompt:@large-file.js explain lines 50-100
    ```
 
 4. **For very large codebases, the tool prevents timeouts automatically**:
@@ -147,9 +151,9 @@ claude mcp add gemini-cli -- npx gemini-mcp-tool
 
 **Common causes**:
 
-1. **Node.js version compatibility** - Ensure Node.js ≥ v16.0.0
-2. **Gemini CLI not installed** - Install with `npm install -g @google/gemini-cli`
-3. **API key not configured** - Run `gemini config set api_key YOUR_API_KEY`
+1. **Node.js version compatibility** - Ensure Node.js >= v18.0.0
+2. **Antigravity CLI not installed** - Run `agy install` and verify `agy --version`
+3. **Antigravity authentication/setup incomplete** - Run `agy models` and complete any prompts
 4. **PATH issues** - Restart terminal after installing Node.js/npm
 
 **Debug steps**:
@@ -158,8 +162,8 @@ claude mcp add gemini-cli -- npx gemini-mcp-tool
 # 1. Check Node.js version
 node --version
 
-# 2. Test Gemini CLI directly
-gemini "Hello"
+# 2. Test Antigravity CLI directly
+agy --model "Gemini 3.5 Flash (Medium)" --print "Hello"
 
 # 3. Reinstall if needed
 npm uninstall -g @joeytheman/gemini-mcp-tool
@@ -191,10 +195,10 @@ claude mcp list
 # "🧠 Gemini is analyzing your request..."
 
 # Use faster Flash model for large requests
-/gemini-cli:analyze -m gemini-3.1-flash-lite-preview @large-file.js
+/ask-gemini prompt:@large-file.js summarize model:"Gemini 3.5 Flash (Low)"
 
 # Break up large analysis into smaller chunks
-/gemini-cli:analyze @specific-function.js explain this function
+/ask-gemini prompt:@specific-function.js explain this function
 ```
 
 ## File Analysis Issues
@@ -209,12 +213,12 @@ claude mcp list
 
 **Solutions**:
 ```bash
-# Use Flash for faster, shorter responses
-/gemini-cli:analyze -m gemini-3.1-flash-lite-preview "your prompt"
+# Use Flash Low for faster, shorter responses
+/ask-gemini prompt:"your prompt" model:"Gemini 3.5 Flash (Low)"
 
 # Break large requests into smaller, focused chunks
-/gemini-cli:analyze @file1.js "explain the main function"
-/gemini-cli:analyze @file2.js "explain the error handling"
+/ask-gemini prompt:@file1.js explain the main function
+/ask-gemini prompt:@file2.js explain the error handling
 ```
 
 ## Configuration Issues
@@ -223,13 +227,13 @@ claude mcp list
 1. Save config file
 2. Completely quit Claude Desktop
 3. Restart Claude Desktop
-4. Verify with `/gemini-cli:help`
+4. Verify with `/Help`
 
 ### Environment variables not working
 ```bash
 # Check current settings
-echo $GEMINI_MODEL
-echo $GOOGLE_GENERATIVE_AI_API_KEY
+echo $AGY_CACHE_ENABLED
+agy models
 ```
 
 ### Configurable Timeout for Large Codebases
@@ -255,40 +259,33 @@ echo $GOOGLE_GENERATIVE_AI_API_KEY
 **For very large codebases** (10,000+ files):
 - Consider breaking analysis into smaller chunks
 - Use more specific file patterns with `@` syntax
-- Switch to `gemini-3.1-flash-lite-preview` for faster processing
+- Use `Gemini 3.5 Flash (Low)` for faster processing
 ```
 
-## Debug Mode
+## Debugging
 
-Enable debug logging:
-```json
-{
-  "mcpServers": {
-    "gemini-cli": {
-      "command": "gemini-mcp",
-      "env": {
-        "DEBUG": "true"
-      }
-    }
-  }
-}
+The old Gemini CLI `debug` option is no longer supported. Use MCP client logs plus Antigravity CLI output:
+
+```bash
+agy --help
+agy models
+agy changelog
 ```
 
 ## Getting Help
 
 1. Check [GitHub Issues](https://github.com/joeytheman/gemini-mcp-tool/issues)
-2. Enable debug mode
-3. Collect error logs
-4. Open a new issue with details
+2. Collect Antigravity and MCP client logs
+3. Open a new issue with details
 
 ## Model Recommendations
 
 | **Use Case** | **Recommended Model** | **Reason** |
 |--------------|----------------------|------------|
-| Complex analysis | `gemini-3.1-pro-preview` | Stronger reasoning |
-| Architecture review | `gemini-3.1-pro-preview` | Better for large codebases |
-| Quick tasks | `gemini-3.1-flash-lite-preview` | Fastest responses |
-| Code review | `gemini-3.1-flash-lite-preview` | Good speed/quality balance |
+| Complex analysis | `Gemini 3.5 Flash (High)` | Deeper review |
+| Architecture review | `Gemini 3.5 Flash (High)` | Better for large codebases |
+| Quick tasks | `Gemini 3.5 Flash (Low)` | Fastest responses |
+| Code review | `Gemini 3.5 Flash (Medium)` | Good speed/quality balance |
 
 ## Quick Fixes
 
@@ -298,21 +295,21 @@ Enable debug logging:
 npm uninstall -g @joeytheman/gemini-mcp-tool
 npm install -g @joeytheman/gemini-mcp-tool
 
-# Reset Gemini CLI
-gemini config reset
-gemini config set api_key YOUR_API_KEY
+# Refresh Antigravity CLI setup
+agy install
+agy models
 ```
 
 ### Test Basic Functionality
 ```bash
-# Test Gemini CLI
-gemini "Hello"
+# Test Antigravity CLI
+agy --model "Gemini 3.5 Flash (Medium)" --print "Hello"
 
-# Test MCP Tool with Flash model
-/gemini-cli:ping
+# Test MCP Tool
+/ping
 
 # Test file analysis with working model
-/gemini-cli:analyze -m gemini-3.1-flash-lite-preview @README.md summarize
+/ask-gemini prompt:@README.md summarize model:"Gemini 3.5 Flash (Medium)"
 ```
 
 ## Platform-Specific Issues

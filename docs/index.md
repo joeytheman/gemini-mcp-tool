@@ -3,7 +3,7 @@ layout: home
 
 hero:
   name: "Gemini MCP Tool"
-  text: "Connect the Gemini CLI to the MCP Ecosystem"
+  text: "Connect Gemini through Antigravity CLI to the MCP Ecosystem"
   tagline: "Leverage Google's Gemini models in any client that supports the standardized MCP protocol—<span style='color: #FFFFFF; background-color: #D97706; padding: 2px 8px; border-radius: 6px; font-size: 14px; font-weight: 600; margin-left: 4px; display: inline-block; vertical-align: middle;'>built for Claude Code</span>"
   actions:
     - theme: brand
@@ -31,10 +31,10 @@ features:
       <span style="color: #3b82f6;">Built on MCP protocol.</span><br><span style="color: #ef4444;">Tested with MCP standard.</span><br><span style="color: #22c55e;"><em>Benchmarked</em> with <span style="color: #f97316;">Claude Code</span>.</span>
   - icon: 🔐
     title: No keys!
-    details: Gemini-mcp-tool does not require any extra keys.
+    details: Gemini MCP Tool uses your Antigravity CLI setup.
   - icon: 🚦
     title: Model Selection
-    details: Choose from Gemini-3-Pro-Preview and Gemini-2.5-Flash, using natural language.
+    details: Choose Gemini 3.5 Flash Low, Medium, or High.
 ---
 
 <div class="explore-hint" style="text-align: center; margin: 32px 0 48px; position: relative;">
@@ -54,5 +54,3 @@ features:
 </div>
 
 For installation and setup instructions, please refer to our [GitHub repository](https://github.com/joeytheman/gemini-mcp-tool#readme) which contains the most up-to-date installation guide.
-
-

@@ -11,7 +11,7 @@ interface CacheEntry {
   promptHash: string;
 }
 
-const CACHE_DIR = path.join(os.tmpdir(), 'gemini-mcp-chunks');
+const CACHE_DIR = path.join(os.tmpdir(), 'agy-mcp-chunks');
 const CACHE_TTL = 10 * 60 * 1000;
 const MAX_CACHE_FILES = 50;
 

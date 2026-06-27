@@ -2,7 +2,6 @@ import { executeCommand } from './commandExecutor.js';
 import { Logger } from './logger.js';
 import {
   ERROR_MESSAGES,
-  STATUS_MESSAGES,
   MODELS,
   CLI
 } from '../constants.js';
@@ -13,7 +12,7 @@ import { chunkChangeModeEdits } from './changeModeChunker.js';
 import { cacheChunks, getChunks } from './chunkCache.js';
 import { generateCacheKey, getCachedResponse, cacheResponse, isCacheEnabled } from './responseCache.js';
 
-export interface GeminiCLIOptions {
+export interface AgyCLIOptions {
   model?: string;
   sandbox?: boolean;
   changeMode?: boolean;
@@ -22,94 +21,100 @@ export interface GeminiCLIOptions {
   outputFormat?: string;
   includeDirectories?: string | string[];
   debug?: boolean;
+  printTimeout?: string;
   promptInteractive?: string;
   extensions?: string | string[];
-  resume?: string;
+  resume?: boolean | string;
   cwd?: string;
 }
 
-/**
- * Helper function to build Gemini CLI arguments from options
- * Eliminates code duplication between main execution and fallback
- */
-function buildGeminiArgs(opts: GeminiCLIOptions, prompt: string, forceModel?: string): string[] {
-  const args: string[] = [];
-  const model = forceModel || opts.model;
+function normalizeList(value?: string | string[]): string[] {
+  if (!value) return [];
 
-  // Model selection
-  if (model) {
-    args.push(CLI.FLAGS.MODEL, model);
+  const items = Array.isArray(value) ? value : value.split(',');
+  return items.map(item => item.trim()).filter(Boolean);
+}
+
+function validateAgyOptions(opts: AgyCLIOptions): void {
+  const unsupported: string[] = [];
+
+  if (opts.outputFormat) unsupported.push('outputFormat');
+  if (opts.debug) unsupported.push('debug');
+  if (opts.promptInteractive) unsupported.push('promptInteractive');
+  if (opts.extensions) unsupported.push('extensions');
+  if (opts.approvalMode && opts.approvalMode !== CLI.DEFAULTS.APPROVAL_MODE_YOLO) {
+    unsupported.push(`approvalMode:${opts.approvalMode}`);
   }
 
-  // Boolean flags
+  if (unsupported.length > 0) {
+    throw new Error(
+      `${ERROR_MESSAGES.UNSUPPORTED_AGY_OPTIONS}: ${unsupported.join(', ')}. ` +
+      `The Antigravity CLI headless path supports model, sandbox, yolo, includeDirectories, printTimeout, resume, and workingDirectory.`
+    );
+  }
+}
+
+function shouldResumeLatest(resume: boolean | string): boolean {
+  if (resume === true) return true;
+
+  const normalized = String(resume).trim().toLowerCase();
+  return normalized === 'true' ||
+    normalized === CLI.DEFAULTS.RESUME_LATEST ||
+    normalized === CLI.DEFAULTS.RESUME_CONTINUE;
+}
+
+function buildAgyArgs(opts: AgyCLIOptions, prompt: string): string[] {
+  validateAgyOptions(opts);
+
+  const args: string[] = [];
+  const model = opts.model || MODELS.DEFAULT;
+
+  args.push(CLI.FLAGS.MODEL, model);
+
   if (opts.sandbox) {
     args.push(CLI.FLAGS.SANDBOX);
   }
-  if (opts.yolo) {
+
+  if (opts.yolo || opts.approvalMode === CLI.DEFAULTS.APPROVAL_MODE_YOLO) {
     args.push(CLI.FLAGS.YOLO);
   }
-  if (opts.debug) {
-    args.push(CLI.FLAGS.DEBUG);
+
+  for (const dir of normalizeList(opts.includeDirectories)) {
+    args.push(CLI.FLAGS.ADD_DIR, dir);
   }
 
-  // Approval mode (overrides yolo if both are set)
-  if (opts.approvalMode) {
-    args.push(CLI.FLAGS.APPROVAL_MODE, opts.approvalMode);
+  if (opts.printTimeout) {
+    args.push(CLI.FLAGS.PRINT_TIMEOUT, opts.printTimeout);
   }
 
-  // Output format
-  if (opts.outputFormat) {
-    args.push(CLI.FLAGS.OUTPUT_FORMAT, opts.outputFormat);
+  if (opts.resume !== undefined && opts.resume !== false && String(opts.resume).trim().toLowerCase() !== 'false') {
+    if (String(opts.resume).trim() === '') {
+      throw new Error('resume must be true, latest, continue, or a non-empty conversation ID.');
+    }
+
+    if (shouldResumeLatest(opts.resume)) {
+      args.push(CLI.FLAGS.CONTINUE);
+    } else {
+      args.push(CLI.FLAGS.CONVERSATION, String(opts.resume).trim());
+    }
   }
 
-  // Include directories (array or comma-separated string)
-  if (opts.includeDirectories) {
-    const dirs = Array.isArray(opts.includeDirectories)
-      ? opts.includeDirectories.join(',')
-      : opts.includeDirectories;
-    args.push(CLI.FLAGS.INCLUDE_DIRECTORIES, dirs);
-  }
-
-  // Extensions (array or comma-separated string)
-  if (opts.extensions) {
-    const exts = Array.isArray(opts.extensions)
-      ? opts.extensions.join(',')
-      : opts.extensions;
-    args.push(CLI.FLAGS.EXTENSIONS, exts);
-  }
-
-  // Resume session
-  if (opts.resume) {
-    args.push(CLI.FLAGS.RESUME, opts.resume);
-  }
-
-  // Prompt interactive
-  if (opts.promptInteractive) {
-    args.push(CLI.FLAGS.PROMPT_INTERACTIVE, opts.promptInteractive);
-  }
-
-  // Use positional prompt (not -p flag which is deprecated in Gemini CLI v0.18+).
-  // @ symbols are safe here: with spawn(cmd, argsArray, {shell: true}),
-  // Node.js auto-quotes each arg for cmd.exe, and @ is not a cmd.exe metacharacter.
-  args.push(prompt);
+  args.push(CLI.FLAGS.PRINT, prompt);
 
   return args;
 }
 
-export async function executeGeminiCLI(
+export async function executeAgyCLI(
   prompt: string,
-  options: GeminiCLIOptions | string,
+  options: AgyCLIOptions | string,
   onProgress?: (newOutput: string) => void
 ): Promise<string> {
-  // Handle backward compatibility - if options is a string, it's the old 'model' parameter
-  let opts: GeminiCLIOptions;
-  if (typeof options === 'string') {
-    opts = { model: options };
-  } else {
-    opts = options || {};
-  }
+  const opts: AgyCLIOptions = typeof options === 'string'
+    ? { model: options }
+    : options || {};
 
-  // Check cache first for non-changeMode requests (changeMode needs fresh responses)
+  validateAgyOptions(opts);
+
   if (isCacheEnabled() && !opts.changeMode) {
     const cacheKey = generateCacheKey(prompt, opts);
     const cached = getCachedResponse(cacheKey);
@@ -119,10 +124,10 @@ export async function executeGeminiCLI(
     }
   }
 
-  let prompt_processed = prompt;
+  let processedPrompt = prompt;
 
   if (opts.changeMode) {
-    prompt_processed = prompt.replace(/file:(\S+)/g, '@$1');
+    processedPrompt = prompt.replace(/file:(\S+)/g, '@$1');
 
     const changeModeInstructions = `
 [CHANGEMODE INSTRUCTIONS]
@@ -182,18 +187,16 @@ NEW:
 IMPORTANT: The OLD section must be an EXACT copy from the file that can be found with Ctrl+F!
 
 USER REQUEST:
-${prompt_processed}
+${processedPrompt}
 `;
-    prompt_processed = changeModeInstructions;
+    processedPrompt = changeModeInstructions;
   }
 
-  // Use helper function to build args (eliminates code duplication)
-  const args = buildGeminiArgs(opts, prompt_processed);
+  const args = buildAgyArgs(opts, processedPrompt);
 
   try {
-    const result = await executeCommand(CLI.COMMANDS.GEMINI, args, onProgress, opts.cwd);
+    const result = await executeCommand(CLI.COMMANDS.AGY, args, onProgress, opts.cwd);
 
-    // Cache successful non-changeMode responses
     if (isCacheEnabled() && !opts.changeMode) {
       const cacheKey = generateCacheKey(prompt, opts);
       cacheResponse(cacheKey, result);
@@ -202,32 +205,10 @@ ${prompt_processed}
     return result;
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    if (errorMessage.includes(ERROR_MESSAGES.QUOTA_EXCEEDED) && opts.model !== MODELS.FLASH) {
-      Logger.warn(`${ERROR_MESSAGES.QUOTA_EXCEEDED}. Falling back to ${MODELS.FLASH}.`);
-      await sendStatusMessage(STATUS_MESSAGES.FLASH_RETRY);
-
-      // Use helper function with Flash model override (eliminates code duplication)
-      const fallbackArgs = buildGeminiArgs(opts, prompt_processed, MODELS.FLASH);
-
-      try {
-        const result = await executeCommand(CLI.COMMANDS.GEMINI, fallbackArgs, onProgress, opts.cwd);
-        Logger.warn(`Successfully executed with ${MODELS.FLASH} fallback.`);
-        await sendStatusMessage(STATUS_MESSAGES.FLASH_SUCCESS);
-
-        // Cache successful fallback response (non-changeMode only)
-        if (isCacheEnabled() && !opts.changeMode) {
-          const cacheKey = generateCacheKey(prompt, opts);
-          cacheResponse(cacheKey, result);
-        }
-
-        return result;
-      } catch (fallbackError) {
-        const fallbackErrorMessage = fallbackError instanceof Error ? fallbackError.message : String(fallbackError);
-        throw new Error(`${MODELS.PRO} quota exceeded, ${MODELS.FLASH} fallback also failed: ${fallbackErrorMessage}`);
-      }
-    } else {
-      throw error;
+    if (errorMessage.includes('ENOENT') || errorMessage.includes('command not found')) {
+      throw new Error(ERROR_MESSAGES.AGY_NOT_FOUND);
     }
+    throw error;
   }
 }
 
@@ -237,7 +218,6 @@ export async function processChangeModeOutput(
   chunkCacheKey?: string,
   prompt?: string
 ): Promise<string> {
-  // Check for cached chunks first
   if (chunkIndex && chunkCacheKey) {
     const cachedChunks = getChunks(chunkCacheKey);
     if (cachedChunks && chunkIndex > 0 && chunkIndex <= cachedChunks.length) {
@@ -247,60 +227,48 @@ export async function processChangeModeOutput(
         chunk.edits,
         { current: chunkIndex, total: cachedChunks.length, cacheKey: chunkCacheKey }
       );
-      
-      // Add summary for first chunk only
+
       if (chunkIndex === 1 && chunk.edits.length > 5) {
         const allEdits = cachedChunks.flatMap(c => c.edits);
         result = summarizeChangeModeEdits(allEdits) + '\n\n' + result;
       }
-      
+
       return result;
     }
     Logger.debug(`Cache miss or invalid chunk index, processing new result`);
   }
-  
-  // Parse OLD/NEW format
+
   const edits = parseChangeModeOutput(rawResult);
-  
+
   if (edits.length === 0) {
     return `No edits found in Gemini's response. Please ensure Gemini uses the OLD/NEW format. \n\n+ ${rawResult}`;
   }
 
-  // Validate edits
   const validation = validateChangeModeEdits(edits);
   if (!validation.valid) {
     return `Edit validation failed:\n${validation.errors.join('\n')}`;
   }
-  
+
   const chunks = chunkChangeModeEdits(edits);
-  
-  // Cache if multiple chunks and we have the original prompt
+
   let cacheKey: string | undefined;
   if (chunks.length > 1 && prompt) {
     cacheKey = cacheChunks(prompt, chunks);
     Logger.debug(`Cached ${chunks.length} chunks with key: ${cacheKey}`);
   }
-  
-  // Return requested chunk or first chunk
+
   const returnChunkIndex = (chunkIndex && chunkIndex > 0 && chunkIndex <= chunks.length) ? chunkIndex : 1;
   const returnChunk = chunks[returnChunkIndex - 1];
-  
-  // Format the response
+
   let result = formatChangeModeResponse(
     returnChunk.edits,
     chunks.length > 1 ? { current: returnChunkIndex, total: chunks.length, cacheKey } : undefined
   );
-  
-  // Add summary if helpful (only for first chunk)
+
   if (returnChunkIndex === 1 && edits.length > 5) {
     result = summarizeChangeModeEdits(edits, chunks.length > 1) + '\n\n' + result;
   }
-  
+
   Logger.debug(`ChangeMode: Parsed ${edits.length} edits, ${chunks.length} chunks, returning chunk ${returnChunkIndex}`);
   return result;
-}
-
-// Placeholder
-async function sendStatusMessage(message: string): Promise<void> {
-  Logger.debug(`Status: ${message}`);
 }

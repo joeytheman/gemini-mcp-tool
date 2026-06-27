@@ -5,18 +5,15 @@ export const LOG_PREFIX = "[GMCPT]";
 
 // Error messages
 export const ERROR_MESSAGES = {
-  QUOTA_EXCEEDED: "RESOURCE_EXHAUSTED",
-  QUOTA_EXCEEDED_SHORT: "⚠️ Gemini Pro daily quota exceeded. Please retry with model: 'gemini-3.1-flash-lite-preview'",
+  AGY_NOT_FOUND: "Antigravity CLI (`agy`) was not found. Install or update Antigravity CLI, run `agy install`, then verify `agy --version` works from your shell.",
   TOOL_NOT_FOUND: "not found in registry",
   NO_PROMPT_PROVIDED: "Please provide a prompt for analysis. Use @ syntax to include files (e.g., '@largefile.js explain what this does') or ask general questions",
+  UNSUPPORTED_AGY_OPTIONS: "Unsupported Antigravity CLI option(s)",
 } as const;
 
 // Status messages
 export const STATUS_MESSAGES = {
-  QUOTA_SWITCHING: "🚫 Gemini Pro quota exceeded, switching to Flash model...",
-  FLASH_RETRY: "⚡ Retrying with Gemini Flash...",
-  FLASH_SUCCESS: "✅ Flash model completed successfully",
-  SANDBOX_EXECUTING: "🔒 Executing Gemini CLI command in sandbox mode...",
+  SANDBOX_EXECUTING: "🔒 Executing Antigravity CLI command in sandbox mode...",
   GEMINI_RESPONSE: "Gemini response:",
   // Timeout prevention messages
   PROCESSING_START: "🔍 Starting analysis (may take 5-15 minutes for large codebases)",
@@ -26,8 +23,10 @@ export const STATUS_MESSAGES = {
 
 // Models
 export const MODELS = {
-  PRO: "gemini-3.1-pro-preview",
-  FLASH: "gemini-3.1-flash-lite-preview",
+  DEFAULT: "Gemini 3.5 Flash (Medium)",
+  FLASH_LOW: "Gemini 3.5 Flash (Low)",
+  FLASH_MEDIUM: "Gemini 3.5 Flash (Medium)",
+  FLASH_HIGH: "Gemini 3.5 Flash (High)",
 } as const;
 
 // MCP Protocol Constants
@@ -61,37 +60,29 @@ export const PROTOCOL = {
 export const CLI = {
   // Command names
   COMMANDS: {
-    GEMINI: "gemini",
+    AGY: "agy",
     ECHO: "echo",
   },
   // Command flags
   FLAGS: {
-    MODEL: "-m",
-    SANDBOX: "-s",
-    PROMPT: "-p",
-    HELP: "-help",
-    // Phase 1: Critical flags
-    YOLO: "-y",
-    APPROVAL_MODE: "--approval-mode",
-    OUTPUT_FORMAT: "-o",
-    INCLUDE_DIRECTORIES: "--include-directories",
-    DEBUG: "-d",
-    // Phase 2: Enhanced features
-    PROMPT_INTERACTIVE: "-i",
-    EXTENSIONS: "-e",
-    RESUME: "-r",
+    MODEL: "--model",
+    SANDBOX: "--sandbox",
+    PRINT: "--print",
+    HELP: "--help",
+    YOLO: "--dangerously-skip-permissions",
+    ADD_DIR: "--add-dir",
+    PRINT_TIMEOUT: "--print-timeout",
+    CONTINUE: "--continue",
+    CONVERSATION: "--conversation",
   },
   // Default values
   DEFAULTS: {
-    MODEL: "default", // Fallback model used when no specific model is provided
+    MODEL: MODELS.DEFAULT,
     BOOLEAN_TRUE: "true",
     BOOLEAN_FALSE: "false",
-    APPROVAL_MODE_DEFAULT: "default",
-    APPROVAL_MODE_AUTO_EDIT: "auto_edit",
     APPROVAL_MODE_YOLO: "yolo",
-    OUTPUT_FORMAT_TEXT: "text",
-    OUTPUT_FORMAT_JSON: "json",
-    OUTPUT_FORMAT_STREAM_JSON: "stream-json",
+    RESUME_LATEST: "latest",
+    RESUME_CONTINUE: "continue",
   },
 } as const;
 
@@ -108,15 +99,16 @@ export interface ToolArguments {
 
   // Phase 1: Critical flags
   yolo?: boolean | string; // Auto-accept all actions (YOLO mode)
-  approvalMode?: string; // Approval mode: default, auto_edit, yolo
-  outputFormat?: string; // Output format: text, json, stream-json
+  approvalMode?: string; // Legacy approval mode; only yolo maps to agy
+  outputFormat?: string; // Unsupported legacy Gemini CLI option
   includeDirectories?: string | string[]; // Additional directories to include
-  debug?: boolean | string; // Enable debug mode
+  debug?: boolean | string; // Unsupported legacy Gemini CLI option
+  printTimeout?: string; // agy --print-timeout duration (for example: 5m, 90s)
 
   // Phase 2: Enhanced features
-  promptInteractive?: string; // Execute prompt and continue interactively
-  extensions?: string | string[]; // Extensions to use
-  resume?: string; // Resume previous session
+  promptInteractive?: string; // Unsupported in MCP request/response mode
+  extensions?: string | string[]; // Unsupported legacy Gemini CLI option
+  resume?: boolean | string; // Continue latest conversation or resume by conversation ID
 
   // Brainstorm tool
   methodology?: string; // Brainstorming framework to use

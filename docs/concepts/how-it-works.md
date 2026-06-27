@@ -28,7 +28,7 @@ flowchart LR
         direction TB
         A[You] --> |"ask gemini..."| B([**Claude**])
         B -..-> |"invokes 'ask-gemini'"| C["Gemini-MCP-Tool"]
-        C --> |"spawn!"| D[Gemini-CLI]
+        C --> |"spawn!"| D[Antigravity CLI agy]
         D e1@-.-> |"response"| C
         C -.-> |"response"| B
         B -.-> |"summary response"| A

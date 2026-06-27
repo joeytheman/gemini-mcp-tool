@@ -15,7 +15,7 @@
 
 > **Fork Notice:** This project is a fork of [jamubc/gemini-mcp-tool](https://github.com/jamubc/gemini-mcp-tool), originally created by [jamubc](https://github.com/jamubc). We are grateful to the original author for their foundational work.
 
-This is a simple Model Context Protocol (MCP) server that allows AI assistants to interact with the [Gemini CLI](https://github.com/google-gemini/gemini-cli). It enables the AI to leverage the power of Gemini's massive token window for large analysis, especially with large files and codebases using the `@` syntax for direction.
+This is a simple Model Context Protocol (MCP) server that lets AI assistants ask Gemini through Google's Antigravity CLI (`agy`). The primary use case is giving Codex, Claude Code, and other MCP clients a second opinion from Gemini on plans, implementations, code reviews, architecture tradeoffs, and large files using the `@` syntax.
 
 - Ask gemini natural questions, through claude or Brainstorm new ideas in a party of 3!
 
@@ -26,25 +26,37 @@ This is a simple Model Context Protocol (MCP) server that allows AI assistants t
 ## TLDR: [![Claude](https://img.shields.io/badge/Claude-D97757?logo=claude&logoColor=fff)](#) + [![Google Gemini](https://img.shields.io/badge/Google%20Gemini-886FBF?logo=googlegemini&logoColor=fff)](#)
 
 
-**Goal**: Use Gemini's powerful analysis capabilities directly in Claude Code to save tokens and analyze large files.
+**Goal**: Use Gemini's analysis capabilities directly from Codex or Claude Code for reviews, critiques, and large-file questions.
+
+## Migration Note
+
+Gemini is now reached through Antigravity CLI (`agy`). The retired Gemini CLI/API path is no longer used, and there is no old Pro-to-Flash quota fallback. Legacy Gemini CLI flags such as `outputFormat`, `extensions`, `debug`, and `approvalMode:auto_edit` now return explicit unsupported-option errors.
 
 ## Prerequisites
 
 Before using this tool, ensure you have:
 
 1. **[Node.js](https://nodejs.org/)** (v18.0.0 or higher)
-2. **[Google Gemini CLI](https://github.com/google-gemini/gemini-cli)** installed and configured
+2. **Antigravity CLI (`agy`)** installed and configured
+
+Verify `agy` before adding the MCP server:
+
+```bash
+agy --version
+agy install
+agy models
+```
 
 
 ### One-Line Setup
 
 ```bash
-claude mcp add gemini-cli -- npx -y @joeytheman/gemini-mcp-tool
+claude mcp add gemini-feedback -- npx -y @joeytheman/gemini-mcp-tool
 ```
 
 ### Verify Installation
 
-Type `/mcp` inside Claude Code to verify the gemini-cli MCP is active.
+Type `/mcp` inside Claude Code to verify the gemini-feedback MCP is active.
 
 ---
 
@@ -54,7 +66,7 @@ If you already have it configured in Claude Desktop:
 
 1. Add to your Claude Desktop config:
 ```json
-"gemini-cli": {
+"gemini-feedback": {
   "command": "npx",
   "args": ["-y", "@joeytheman/gemini-mcp-tool"]
 }
@@ -76,7 +88,7 @@ Add this configuration to your Claude Desktop config file:
 ```json
 {
   "mcpServers": {
-    "gemini-cli": {
+    "gemini-feedback": {
       "command": "npx",
       "args": ["-y", "@joeytheman/gemini-mcp-tool"]
     }
@@ -91,7 +103,7 @@ If you installed globally, use this configuration instead:
 ```json
 {
   "mcpServers": {
-    "gemini-cli": {
+    "gemini-feedback": {
       "command": "gemini-mcp"
     }
   }
@@ -100,16 +112,16 @@ If you installed globally, use this configuration instead:
 
 ### Optional: Enable Response Caching
 
-To enable the LRU response cache for near-instant repeated queries, add the `GEMINI_CACHE_ENABLED` environment variable:
+To enable the LRU response cache for near-instant repeated queries, add the `AGY_CACHE_ENABLED` environment variable:
 
 ```json
 {
   "mcpServers": {
-    "gemini-cli": {
+    "gemini-feedback": {
       "command": "npx",
       "args": ["-y", "@joeytheman/gemini-mcp-tool"],
       "env": {
-        "GEMINI_CACHE_ENABLED": "true"
+        "AGY_CACHE_ENABLED": "true"
       }
     }
   }
@@ -130,7 +142,7 @@ After updating the configuration, restart your terminal session.
 ## Example Workflow
 
 - **Natural language**: "use gemini to explain index.html", "understand the massive project using gemini", "ask gemini to search for latest news"
-- **Claude Code**: Type `/gemini-cli` and commands will populate in Claude Code's interface.
+- **Claude Code**: Use `/ask-gemini` directly, or ask naturally for Gemini feedback.
 
 ## Usage Examples
 
@@ -146,9 +158,9 @@ After updating the configuration, restart your terminal session.
 - `use gemini to explain div centering`
 - `ask gemini about best practices for React development related to @file_im_confused_about`
 
-### Using Gemini CLI's Sandbox Mode (-s)
+### Using Antigravity Sandbox Mode
 
-The sandbox mode allows you to safely test code changes, run scripts, or execute potentially risky operations in an isolated environment.
+The sandbox mode maps to `agy --sandbox`, which runs with terminal restrictions enabled.
 
 - `use gemini sandbox to create and run a Python script that processes data`
 - `ask gemini to safely test @script.py and explain what it does`
@@ -159,24 +171,21 @@ The sandbox mode allows you to safely test code changes, run scripts, or execute
 
 These tools are designed to be used by the AI assistant.
 
-- **`ask-gemini`**: Execute Gemini CLI with full feature support including advanced flags, caching, and change mode.
-  - **`prompt`** (required): The analysis request. Use the `@` syntax to include file or directory references (e.g., `@src/main.js explain this code`) or ask general questions (e.g., `Please use a web search to find the latest news stories`).
-  - **`model`** (optional): The Gemini model to use. Defaults to `gemini-3.1-pro-preview`. Use `gemini-3.1-flash-lite-preview` for faster responses.
-  - **`sandbox`** (optional): Set to `true` to run in sandbox mode for safe code execution.
+- **`ask-gemini`**: Ask Gemini through Antigravity CLI (`agy`) for plan review, implementation critique, code review, architecture feedback, debugging, and tradeoff analysis.
+  - **`prompt`** (required): The analysis request. Use the `@` syntax to include file or directory references (e.g., `@src/main.js review this implementation`) or ask general questions.
+  - **`model`** (optional): The Antigravity model to use. Defaults to `Gemini 3.5 Flash (Medium)`. Verified Flash tiers include `Gemini 3.5 Flash (Low)`, `Gemini 3.5 Flash (Medium)`, and `Gemini 3.5 Flash (High)`.
+  - **`sandbox`** (optional): Set to `true` to pass `--sandbox`.
   - **`changeMode`** (optional): Enable structured change mode for edit suggestions that Claude can apply directly.
-  - **`yolo`** (optional): Auto-accept all actions (YOLO mode). Use with caution.
-  - **`approvalMode`** (optional): Fine-grained approval control: `default`, `auto_edit`, or `yolo`.
-  - **`outputFormat`** (optional): Control output format: `text`, `json`, or `stream-json`.
-  - **`includeDirectories`** (optional): Additional directories to include in workspace.
-  - **`debug`** (optional): Enable verbose logging for troubleshooting.
-  - **`promptInteractive`** (optional): Execute prompt and continue in interactive mode.
-  - **`extensions`** (optional): Filter specific file extensions.
-  - **`resume`** (optional): Resume previous session (use `latest` or session number).
-  - **`workingDirectory`** (optional): Working directory to run Gemini from. Use drive root (e.g., 'C:/' or 'D:/') on Windows to access files across drives.
+  - **`yolo`** (optional): Pass `--dangerously-skip-permissions`. Use with caution.
+  - **`includeDirectories`** (optional): Additional directories to include in the Antigravity workspace; maps to repeated `--add-dir`.
+  - **`printTimeout`** (optional): Pass `--print-timeout` (for example, `5m` or `90s`).
+  - **`resume`** (optional): `true`, `latest`, or `continue` maps to `--continue`; any other string maps to `--conversation <id>`.
+  - **`workingDirectory`** (optional): Working directory to run `agy` from. Use drive root (e.g., 'C:/' or 'D:/') on Windows to access files across drives.
+  - **Unsupported legacy options**: `outputFormat`, `extensions`, `debug`, `promptInteractive`, and `approvalMode` except `approvalMode: "yolo"`.
 
 - **`brainstorm`**: Generate creative ideas with structured methodologies and domain context.
   - **`prompt`** (required): Brainstorming challenge or question to explore.
-  - **`model`** (optional): The Gemini model to use.
+  - **`model`** (optional): The Antigravity model to use.
   - **`methodology`** (optional): Framework to use: `divergent`, `convergent`, `scamper`, `design-thinking`, `lateral`, or `auto` (default).
   - **`domain`** (optional): Domain context (e.g., 'software', 'business', 'creative', 'research').
   - **`constraints`** (optional): Known limitations or requirements.
@@ -190,17 +199,17 @@ These tools are designed to be used by the AI assistant.
 - **`ping`**: Echo test message to verify server connection.
   - **`prompt`** (optional): Message to echo back.
 
-- **`Help`**: Display Gemini CLI help information.
+- **`Help`**: Display Antigravity CLI (`agy`) help information.
 
 ### Slash Commands (for the User)
 
 You can use these commands directly in Claude Code's interface (compatibility with other clients has not been tested).
 
-- **/ask-gemini**: Execute Gemini CLI with advanced features and caching.
+- **/ask-gemini**: Ask Gemini through Antigravity CLI with caching and change mode.
   - **Example**: `/ask-gemini prompt:@src/ summarize this directory`
   - **With sandbox**: `/ask-gemini prompt:@script.py test this safely sandbox:true`
   - **With change mode**: `/ask-gemini prompt:Refactor this code changeMode:true`
-  - **Supports all flags**: yolo, approvalMode, outputFormat, debug, etc.
+  - **Supported backend flags**: model, sandbox, yolo, includeDirectories, printTimeout, resume, workingDirectory.
 
 - **/brainstorm**: Generate structured ideas with creative methodologies.
   - **Example**: `/brainstorm prompt:How can we improve user onboarding? methodology:design-thinking domain:software`
@@ -209,7 +218,7 @@ You can use these commands directly in Claude Code's interface (compatibility wi
 - **/fetch-chunk**: Retrieve next chunk of a large changeMode response.
   - **Example**: `/fetch-chunk cacheKey:abc123 chunkIndex:2`
 
-- **/Help**: Display Gemini CLI help information.
+- **/Help**: Display Antigravity CLI help information.
   - **Example**: `/Help`
 
 - **/ping**: Test the MCP server connection.
@@ -219,7 +228,7 @@ You can use these commands directly in Claude Code's interface (compatibility wi
 
 This MCP server includes several performance optimizations:
 
-- **LRU Response Cache** (opt-in): Near-instant responses for repeated queries with 30-minute TTL and 10MB max size. Enable via `GEMINI_CACHE_ENABLED=true` env var.
+- **LRU Response Cache** (opt-in): Near-instant responses for repeated queries with 30-minute TTL and 10MB max size. Enable via `AGY_CACHE_ENABLED=true` env var.
 - **Efficient Command Execution**: O(n) array buffer performance for large outputs
 - **Smart Chunking**: Large changeMode responses are automatically chunked for better handling
 - **Progress Notifications**: Real-time progress updates during long-running operations

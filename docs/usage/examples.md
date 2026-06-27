@@ -6,7 +6,7 @@ Practical examples of using Gemini MCP Tool in development workflows.
 
 ### Reviewing a Pull Request
 ```
-/gemini-cli:analyze @feature/new-api/*.js review these changes for:
+/ask-gemini prompt:@feature/new-api/*.js review these changes for:
 - Security issues
 - Performance concerns  
 - Code style consistency
@@ -22,7 +22,7 @@ Practical examples of using Gemini MCP Tool in development workflows.
 
 ### Analyzing Error Logs
 ```
-/gemini-cli:analyze @logs/error.log @src/api/handler.js 
+/ask-gemini prompt:@logs/error.log @src/api/handler.js 
 why am I getting "undefined is not a function" errors?
 ```
 
@@ -35,7 +35,7 @@ why am I getting "undefined is not a function" errors?
 
 ### Understanding a New Codebase
 ```
-/gemini-cli:analyze @package.json @src/**/*.js @README.md
+/ask-gemini prompt:@package.json @src/**/*.js @README.md
 give me an overview of this project's architecture
 ```
 
@@ -48,7 +48,7 @@ give me an overview of this project's architecture
 
 ### Generating API Docs
 ```
-/gemini-cli:analyze @routes/api/*.js generate OpenAPI documentation for these endpoints
+/ask-gemini prompt:@routes/api/*.js generate OpenAPI documentation for these endpoints
 ```
 
 ### README Creation
@@ -60,7 +60,7 @@ give me an overview of this project's architecture
 
 ### Writing Tests
 ```
-/gemini-cli:analyze @src/utils/validator.js write comprehensive Jest tests for this module
+/ask-gemini prompt:@src/utils/validator.js write comprehensive Jest tests for this module
 ```
 
 ### Test Coverage Analysis
@@ -72,7 +72,7 @@ give me an overview of this project's architecture
 
 ### Code Optimization
 ```
-/gemini-cli:analyze @src/data-processor.js this function is slow, how can I optimize it?
+/ask-gemini prompt:@src/data-processor.js this function is slow, how can I optimize it?
 ```
 
 ### Pattern Implementation
@@ -84,7 +84,7 @@ give me an overview of this project's architecture
 
 ### Understanding Concepts
 ```
-/gemini-cli:sandbox show me how OAuth 2.0 works with a working example
+/ask-gemini prompt:show me how OAuth 2.0 works with a working example
 ```
 
 ### Best Practices
@@ -96,7 +96,7 @@ give me an overview of this project's architecture
 
 ### Framework Upgrade
 ```
-/gemini-cli:analyze @package.json @src/**/*.js 
+/ask-gemini prompt:@package.json @src/**/*.js 
 what changes are needed to upgrade from Express 4 to Express 5?
 ```
 
@@ -109,7 +109,7 @@ what changes are needed to upgrade from Express 4 to Express 5?
 
 ### Vulnerability Scan
 ```
-/gemini-cli:analyze @src/**/*.js @package.json 
+/ask-gemini prompt:@src/**/*.js @package.json 
 perform a security audit and identify potential vulnerabilities
 ```
 
@@ -122,7 +122,7 @@ perform a security audit and identify potential vulnerabilities
 
 ### Bottleneck Detection
 ```
-/gemini-cli:analyze @src/routes/*.js @src/middleware/*.js
+/ask-gemini prompt:@src/routes/*.js @src/middleware/*.js
 identify performance bottlenecks in the request pipeline
 ```
 
@@ -136,23 +136,23 @@ identify performance bottlenecks in the request pipeline
 ### Full Stack Review
 ```bash
 # 1. Architecture overview
-/gemini-cli:analyze @package.json @src/index.js @client/App.jsx 
+/ask-gemini prompt:@package.json @src/index.js @client/App.jsx 
 explain how the frontend and backend connect
 
 # 2. API Security
-/gemini-cli:analyze @routes/api/*.js @middleware/auth.js 
+/ask-gemini prompt:@routes/api/*.js @middleware/auth.js 
 review API security implementation
 
 # 3. Database optimization
-/gemini-cli:analyze @models/*.js @db/queries/*.sql 
+/ask-gemini prompt:@models/*.js @db/queries/*.sql 
 suggest database optimizations
 
 # 4. Frontend performance
-/gemini-cli:analyze @client/**/*.jsx @client/**/*.css 
+/ask-gemini prompt:@client/**/*.jsx @client/**/*.css 
 how can I improve frontend performance?
 
 # 5. Test coverage
-/gemini-cli:analyze @src/**/*.js @test/**/*.test.js 
+/ask-gemini prompt:@src/**/*.js @test/**/*.test.js 
 what critical paths lack test coverage?
 ```
 

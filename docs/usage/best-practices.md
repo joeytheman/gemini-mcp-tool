@@ -50,8 +50,9 @@ Include configuration with implementation:
 ## Token Management
 
 ### Gemini Model Selection
-- **Quick tasks**: Use `gemini-3.1-flash-lite-preview`
-- **Full analysis**: Use `gemini-3.1-pro-preview`
+- **Quick tasks**: Use `Gemini 3.5 Flash (Low)`
+- **Default review/critique**: Use `Gemini 3.5 Flash (Medium)`
+- **Full analysis**: Use `Gemini 3.5 Flash (High)`
 
 ### Efficient File Inclusion
 ```bash
@@ -75,7 +76,7 @@ Include configuration with implementation:
 ### Save Context Between Sessions
 ```bash
 # Create a context file
-/gemini-cli:analyze @previous-analysis.md @src/new-feature.js 
+/ask-gemini prompt:@previous-analysis.md @src/new-feature.js 
 continue from our last discussion
 ```
 
@@ -119,7 +120,7 @@ Always include full error messages and stack traces when debugging.
 
 ### Comprehensive Security Checks
 ```bash
-/gemini-cli:analyze @src/**/*.js @package.json @.env.example
+/ask-gemini prompt:@src/**/*.js @package.json @.env.example
 - Check for hardcoded secrets
 - Review authentication logic
 - Identify OWASP vulnerabilities
@@ -177,7 +178,7 @@ Always include full error messages and stack traces when debugging.
 
 ### Pre-commit Reviews
 ```bash
-alias gemini-review='/gemini-cli:analyze @$(git diff --staged --name-only) review staged changes'
+alias gemini-review='/ask-gemini prompt:@$(git diff --staged --name-only) review staged changes'
 ```
 
 ### Daily Development

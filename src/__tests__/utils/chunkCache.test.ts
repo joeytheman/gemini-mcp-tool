@@ -17,7 +17,7 @@ const mockFileStats = new Map<string, { mtimeMs: number }>();
 
 vi.mock('fs', () => ({
   existsSync: vi.fn((filePath: string) => {
-    return mockFileStore.has(filePath) || filePath.endsWith('gemini-mcp-chunks');
+    return mockFileStore.has(filePath) || filePath.endsWith('agy-mcp-chunks');
   }),
   mkdirSync: vi.fn(),
   writeFileSync: vi.fn((filePath: string, content: string) => {
@@ -153,7 +153,7 @@ describe('chunkCache', () => {
       expect(stats.size).toBe(3);
       expect(stats.ttl).toBe(10 * 60 * 1000);
       expect(stats.maxSize).toBe(50);
-      expect(stats.cacheDir).toContain('gemini-mcp-chunks');
+      expect(stats.cacheDir).toContain('agy-mcp-chunks');
     });
   });
 });

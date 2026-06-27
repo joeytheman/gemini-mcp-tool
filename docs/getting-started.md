@@ -31,9 +31,17 @@
 
 Before installing, ensure you have:
 
-- **[Node.js](https://nodejs.org/)** v16.0.0 or higher
-- **[Google Gemini CLI](https://github.com/google-gemini/gemini-cli)** installed and configured on your system
+- **[Node.js](https://nodejs.org/)** v18.0.0 or higher
+- **Antigravity CLI (`agy`)** installed and configured on your system
 - **[Claude Desktop](https://claude.ai/download)** or **[Claude Code](https://www.anthropic.com/claude-code)** with MCP support
+
+Verify Antigravity before configuring the MCP server:
+
+```bash
+agy --version
+agy install
+agy models
+```
 
 
 ## Claude Code (Recommended)
@@ -43,7 +51,7 @@ Claude Code offers the smoothest experience.
 
 ```bash
 # install for claude code
-claude mcp add gemini-cli -- npx -y @joeytheman/gemini-mcp-tool
+claude mcp add gemini-feedback -- npx -y @joeytheman/gemini-mcp-tool
 
 # Start Claude Code - it's automatically configured!
 claude
@@ -70,7 +78,7 @@ For Claude Desktop users, add this to your configuration file:
 ```json
 {
   "mcpServers": {
-    "gemini-cli": {
+    "gemini-feedback": {
       "command": "npx",
       "args": ["-y", "@joeytheman/gemini-mcp-tool"]
     }
@@ -105,7 +113,7 @@ Gemini MCP Tool works with 40+ MCP clients! Here are the common configuration pa
 
 ```json
 {
-  "gemini-cli": {
+  "gemini-feedback": {
     "command": "npx",
     "args": [
       "-y",
@@ -122,10 +130,10 @@ Gemini MCP Tool works with 40+ MCP clients! Here are the common configuration pa
 </details>
 ### Generic Setup Steps
 
-1. **Install Prerequisites**: Ensure [Gemini CLI](https://github.com/google-gemini/gemini-cli) is installed
+1. **Install Prerequisites**: Ensure `agy` is installed and available on `PATH`
 2. **Add Server Config**: Use the STDIO transport pattern above
 3. **Restart Client**: Most clients require restart after config changes
-4. **Test Connection**: Try `/gemini-cli:ping` or natural language commands
+4. **Test Connection**: Try `/ping` or natural language commands
 
 ## Verify Your Setup
 
@@ -134,17 +142,17 @@ Once configured, test that everything is working:
 ### 1. Basic Connectivity Test
 Type in Claude:
 ```
-/gemini-cli:ping "Hello from Gemini MCP!"
+/ping "Hello from Gemini MCP!"
 ```
 
 ### 2. Test File Analysis
 ```
-/gemini-cli:analyze @README.md summarize this file
+/ask-gemini prompt:@README.md summarize this file
 ```
 
 ### 3. Test Sandbox Mode
 ```
-/gemini-cli:sandbox create a simple Python hello world script
+/ask-gemini prompt:create a simple Python hello world script sandbox:true
 ```
 
 ## Quick Command Reference
@@ -157,11 +165,11 @@ Once installed, you can use natural language or slash commands:
 - "ask gemini to search for latest news"
 
 ### Slash Commands in Claude Code
-Type `/gemini-cli` and these commands will appear:
-- `/gemini-cli:analyze` - Analyze files or ask questions
-- `/gemini-cli:sandbox` - Safe code execution
-- `/gemini-cli:help` - Show help information
-- `/gemini-cli:ping` - Test connectivity
+Common tool prompts:
+- `/ask-gemini` - Ask Gemini for plan review, implementation critique, code review, or file analysis
+- `/brainstorm` - Generate structured ideas
+- `/Help` - Show Antigravity CLI help information
+- `/ping` - Test connectivity
 
 ## Need a Different Client?
 
@@ -175,10 +183,11 @@ Don't see your MCP client listed? Gemini MCP Tool uses standard MCP protocol and
 
 ## Common Issues
 
-### "Command not found: gemini"
-Make sure you've installed the Gemini CLI:
+### "Antigravity CLI (`agy`) was not found"
+Make sure you've installed and configured Antigravity CLI:
 ```bash
-npm install -g @google/gemini-cli
+agy install
+agy --version
 ```
 
 ### "MCP server not responding"
@@ -186,7 +195,7 @@ npm install -g @google/gemini-cli
 1. Check your configuration file path
 2. Ensure JSON syntax is correct
 3. Restart your MCP client completely
-4. Verify Gemini CLI works: `gemini -help`
+4. Verify Antigravity CLI works: `agy --help`
 
 
 ### Client-Specific Issues

@@ -25,8 +25,8 @@ describe('responseCache', () => {
 
   describe('generateCacheKey', () => {
     it('should produce a deterministic SHA256 hash', () => {
-      const key1 = generateCacheKey('test prompt', { model: 'gemini-3.1-pro-preview' });
-      const key2 = generateCacheKey('test prompt', { model: 'gemini-3.1-pro-preview' });
+      const key1 = generateCacheKey('test prompt', { model: 'Gemini 3.5 Flash (Medium)' });
+      const key2 = generateCacheKey('test prompt', { model: 'Gemini 3.5 Flash (Medium)' });
       expect(key1).toBe(key2);
       // SHA256 produces 64 hex chars
       expect(key1).toMatch(/^[0-9a-f]{64}$/);
@@ -49,28 +49,34 @@ describe('responseCache', () => {
       const key2 = generateCacheKey('test', { sandbox: false });
       expect(key1).not.toBe(key2);
     });
+
+    it('should produce different keys for different working directories', () => {
+      const key1 = generateCacheKey('test', { cwd: '/project-a' });
+      const key2 = generateCacheKey('test', { cwd: '/project-b' });
+      expect(key1).not.toBe(key2);
+    });
   });
 
   describe('isCacheEnabled', () => {
     it('should return true when env var is "true"', () => {
-      const original = process.env.GEMINI_CACHE_ENABLED;
-      process.env.GEMINI_CACHE_ENABLED = 'true';
+      const original = process.env.AGY_CACHE_ENABLED;
+      process.env.AGY_CACHE_ENABLED = 'true';
       expect(isCacheEnabled()).toBe(true);
-      process.env.GEMINI_CACHE_ENABLED = original;
+      process.env.AGY_CACHE_ENABLED = original;
     });
 
     it('should return false when env var is not "true"', () => {
-      const original = process.env.GEMINI_CACHE_ENABLED;
-      delete process.env.GEMINI_CACHE_ENABLED;
+      const original = process.env.AGY_CACHE_ENABLED;
+      delete process.env.AGY_CACHE_ENABLED;
       expect(isCacheEnabled()).toBe(false);
-      process.env.GEMINI_CACHE_ENABLED = original;
+      process.env.AGY_CACHE_ENABLED = original;
     });
 
     it('should return false when env var is "false"', () => {
-      const original = process.env.GEMINI_CACHE_ENABLED;
-      process.env.GEMINI_CACHE_ENABLED = 'false';
+      const original = process.env.AGY_CACHE_ENABLED;
+      process.env.AGY_CACHE_ENABLED = 'false';
       expect(isCacheEnabled()).toBe(false);
-      process.env.GEMINI_CACHE_ENABLED = original;
+      process.env.AGY_CACHE_ENABLED = original;
     });
   });
 

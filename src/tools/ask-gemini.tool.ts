@@ -1,39 +1,38 @@
 import { z } from 'zod';
 import { UnifiedTool } from './registry.js';
-import { executeGeminiCLI, processChangeModeOutput } from '../utils/geminiExecutor.js';
+import { executeAgyCLI, processChangeModeOutput } from '../utils/agyExecutor.js';
 import { 
   ERROR_MESSAGES, 
   STATUS_MESSAGES
 } from '../constants.js';
 
-const askGeminiArgsSchema = z.object({
-  prompt: z.string().min(1).describe("Analysis request. Use @ syntax to include files (e.g., '@largefile.js explain what this does') or ask general questions"),
-  model: z.string().optional().describe("Optional model to use (e.g., 'gemini-3.1-flash-lite-preview'). If not specified, uses the default model (gemini-3.1-pro-preview)."),
-  sandbox: z.boolean().default(false).describe("Use sandbox mode (-s flag) to safely test code changes, execute scripts, or run potentially risky operations in an isolated environment"),
+export const askGeminiArgsSchema = z.object({
+  prompt: z.string().min(1).describe("Analysis request for Gemini feedback. Use @ syntax to include files (e.g., '@largefile.js review this implementation') or ask for plan/code review feedback"),
+  model: z.string().optional().describe("Optional Antigravity model name. Defaults to 'Gemini 3.5 Flash (Medium)'. Other verified options include 'Gemini 3.5 Flash (Low)' and 'Gemini 3.5 Flash (High)'."),
+  sandbox: z.boolean().default(false).describe("Use Antigravity sandbox mode (--sandbox) to restrict terminal access"),
   changeMode: z.boolean().default(false).describe("Enable structured change mode - formats prompts to prevent tool errors and returns structured edit suggestions that Claude can apply directly"),
   chunkIndex: z.union([z.number(), z.string()]).optional().describe("Which chunk to return (1-based)"),
   chunkCacheKey: z.string().optional().describe("Optional cache key for continuation"),
-  workingDirectory: z.string().optional().describe("Working directory to run Gemini from. Use drive root (e.g., 'C:/' or 'D:/') to access files on that drive."),
+  workingDirectory: z.string().optional().describe("Working directory to run agy from. Use drive root (e.g., 'C:/' or 'D:/') to access files on that drive."),
 
-  // Phase 1: Critical flags
-  yolo: z.boolean().default(false).describe("Auto-accept all actions (YOLO mode). Automatically approves all confirmations without prompting. Use with caution in automated workflows."),
-  approvalMode: z.enum(["default", "auto_edit", "yolo"]).optional().describe("Set approval mode: 'default' (prompt for approval), 'auto_edit' (auto-approve edit tools only), 'yolo' (auto-approve all tools). Overrides yolo flag if both are set."),
-  outputFormat: z.enum(["text", "json", "stream-json"]).optional().describe("Output format: 'text' (default human-readable), 'json' (structured JSON), 'stream-json' (streaming JSON for real-time processing)"),
-  includeDirectories: z.union([z.string(), z.array(z.string())]).optional().describe("Additional directories to include in workspace (comma-separated string or array). Example: 'src,tests' or ['src', 'tests']"),
-  debug: z.boolean().default(false).describe("Enable debug mode for verbose logging and troubleshooting"),
+  yolo: z.boolean().default(false).describe("Map to agy --dangerously-skip-permissions. Auto-approves all tool permission requests without prompting. Use with caution."),
+  approvalMode: z.enum(["default", "auto_edit", "yolo"]).optional().describe("Legacy Gemini CLI option. Only 'yolo' is supported and maps to --dangerously-skip-permissions; other values return an explicit error."),
+  outputFormat: z.enum(["text", "json", "stream-json"]).optional().describe("Unsupported legacy Gemini CLI option. agy --print currently returns text output."),
+  includeDirectories: z.union([z.string(), z.array(z.string())]).optional().describe("Additional directories to include in the Antigravity workspace. Comma-separated string or array maps to repeated --add-dir flags."),
+  debug: z.boolean().default(false).describe("Unsupported legacy Gemini CLI option. Use agy logs for troubleshooting."),
+  printTimeout: z.string().optional().describe("agy --print-timeout duration, such as '5m', '90s', or '10m'. If omitted, agy uses its default."),
 
-  // Phase 2: Enhanced features (for future implementation)
-  promptInteractive: z.string().optional().describe("Execute the provided prompt and continue in interactive mode"),
-  extensions: z.union([z.string(), z.array(z.string())]).optional().describe("Specific extensions to use (comma-separated or array). If not provided, all extensions are used."),
-  resume: z.string().optional().describe("Resume a previous session. Use 'latest' for most recent or session index number"),
+  promptInteractive: z.string().optional().describe("Unsupported in MCP request/response mode because it requires an interactive TTY."),
+  extensions: z.union([z.string(), z.array(z.string())]).optional().describe("Unsupported legacy Gemini CLI option. Antigravity uses plugins instead of Gemini CLI extensions."),
+  resume: z.union([z.boolean(), z.string()]).optional().describe("Resume an agy conversation. true/latest/continue maps to --continue; any other string maps to --conversation <id>."),
 });
 
 export const askGeminiTool: UnifiedTool = {
   name: "ask-gemini",
-  description: "Ask Google Gemini with full CLI support: model selection [-m], sandbox [-s], YOLO mode [-y], approval modes, output formats, and more",
+  description: "Ask Gemini through Antigravity CLI (`agy`) for plan review, implementation critique, code review, architecture feedback, debugging, and tradeoff analysis",
   zodSchema: askGeminiArgsSchema,
   prompt: {
-    description: "Execute Gemini CLI with advanced options. Supports file analysis (@syntax), YOLO mode, different approval levels, output formats (text/json), debug mode, and structured change mode for edit suggestions.",
+    description: "Ask Gemini through Antigravity CLI (`agy`). Supports file analysis (@syntax), sandbox, yolo permission mode, extra workspace directories, print timeouts, resume, and structured change mode for edit suggestions.",
   },
   category: 'gemini',
   annotations: {
@@ -45,7 +44,7 @@ export const askGeminiTool: UnifiedTool = {
     const {
       prompt, model, sandbox, changeMode, chunkIndex, chunkCacheKey, workingDirectory,
       yolo, approvalMode, outputFormat, includeDirectories, debug,
-      promptInteractive, extensions, resume
+      printTimeout, promptInteractive, extensions, resume
     } = args; if (!prompt?.trim()) { throw new Error(ERROR_MESSAGES.NO_PROMPT_PROVIDED); }
   
     if (changeMode && chunkIndex && chunkCacheKey) {
@@ -57,7 +56,7 @@ export const askGeminiTool: UnifiedTool = {
       );
     }
     
-    const result = await executeGeminiCLI(
+    const result = await executeAgyCLI(
       prompt as string,
       {
         model: model as string | undefined,
@@ -68,9 +67,10 @@ export const askGeminiTool: UnifiedTool = {
         outputFormat: outputFormat as string | undefined,
         includeDirectories: includeDirectories,
         debug: !!debug,
+        printTimeout: printTimeout as string | undefined,
         promptInteractive: promptInteractive as string | undefined,
         extensions: extensions,
-        resume: resume as string | undefined,
+        resume: resume as boolean | string | undefined,
         cwd: workingDirectory as string | undefined,
       },
       onProgress
