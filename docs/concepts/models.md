@@ -18,12 +18,8 @@ Other verified `agy models` tiers:
 - **Gemini 3.5 Flash (High)**: slower Flash tier, higher reasoning budget
 
 ## Setting Models
-```bash
-You need use natural language: "...using gemini flash"
-```
-```bash
-You can also pass the exact Antigravity model name in the `model` argument.
-```
+
+You can ask in natural language (e.g. "...using gemini flash"), or pass the exact Antigravity model name in the `model` argument.
 
 ### Per Request
 ```

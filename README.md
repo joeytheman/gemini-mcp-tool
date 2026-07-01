@@ -30,7 +30,7 @@ This is a simple Model Context Protocol (MCP) server that lets AI assistants ask
 
 ## What's New in 2.0.1
 
-- **Gemini 3.1 Pro support** — `agy models` now exposes `Gemini 3.1 Pro (Low)` and `Gemini 3.1 Pro (High)`. The default model is now **Gemini 3.1 Pro (High)** (previously Gemini 3.5 Flash (Medium)). Pass `model: "Gemini 3.5 Flash (Low|Medium|High)"` if you want the faster, cheaper Flash tiers instead.
+- **Gemini 3.1 Pro support** — `agy models` now exposes `Gemini 3.1 Pro (Low)` and `Gemini 3.1 Pro (High)`. The default model is now **Gemini 3.1 Pro (High)** (previously Gemini 3.5 Flash (Medium)). Pass `model: "Gemini 3.5 Flash (Low)"`, `"Gemini 3.5 Flash (Medium)"`, or `"Gemini 3.5 Flash (High)"` if you want the faster, cheaper Flash tiers instead.
 
 ## What's New in 2.0
 
