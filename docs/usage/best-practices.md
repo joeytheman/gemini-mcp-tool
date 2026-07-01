@@ -51,8 +51,8 @@ Include configuration with implementation:
 
 ### Gemini Model Selection
 - **Quick tasks**: Use `Gemini 3.5 Flash (Low)`
-- **Default review/critique**: Use `Gemini 3.5 Flash (Medium)`
-- **Full analysis**: Use `Gemini 3.5 Flash (High)`
+- **Balanced review/critique**: Use `Gemini 3.5 Flash (Medium)`
+- **Deepest analysis (default)**: Use `Gemini 3.1 Pro (High)` (or `Gemini 3.1 Pro (Low)` for less latency)
 
 ### Efficient File Inclusion
 ```bash

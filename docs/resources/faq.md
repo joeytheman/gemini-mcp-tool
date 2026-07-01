@@ -48,8 +48,9 @@ It's how you reference files for analysis:
 Yes! Gemini's large context window allows analyzing entire codebases.
 
 ### Which model should I use?
+- **Default / deepest review**: Gemini 3.1 Pro (High) *(default)*
 - **Daily work**: Gemini 3.5 Flash (Medium)
-- **Large analysis**: Gemini 3.5 Flash (High)
+- **Large analysis**: Gemini 3.1 Pro (Low or High)
 - **Quick tasks**: Gemini 3.5 Flash (Low)
 
 ## Features
