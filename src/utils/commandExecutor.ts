@@ -22,6 +22,7 @@ export async function executeCommand(
     const stdoutChunks: string[] = [];
     const stderrChunks: string[] = [];
     let isResolved = false;
+    let resourceExhausted = false;
 
     childProcess.stdout.on("data", (data) => {
       const chunk = data.toString();
@@ -38,8 +39,10 @@ export async function executeCommand(
     childProcess.stderr.on("data", (data) => {
       const chunk = data.toString();
       stderrChunks.push(chunk);
-      // Surface resource/quota failures from the backend without attempting fallback.
-      if (chunk.includes("RESOURCE_EXHAUSTED")) {
+      // Surface resource/quota failures from the backend without attempting
+      // fallback. Build the structured error once, on the first marker.
+      if (!resourceExhausted && chunk.includes("RESOURCE_EXHAUSTED")) {
+        resourceExhausted = true;
         const stderrSoFar = stderrChunks.join('');
         const modelMatch = stderrSoFar.match(/Quota exceeded for quota metric '([^']+)'/);
         const statusMatch = stderrSoFar.match(/status["\s]*[:=]\s*(\d+)/);
@@ -75,13 +78,18 @@ export async function executeCommand(
         const stdout = stdoutChunks.join('');
         const stderr = stderrChunks.join('');
 
-        if (code === 0) {
+        // Treat an exit-0 run as failed only when it reported quota exhaustion
+        // AND produced no usable stdout — so a quota error with empty output is
+        // surfaced (not silently "recovered"), while a run that still returned a
+        // real answer is kept.
+        const quotaFailure = resourceExhausted && stdout.trim() === "";
+        if (code === 0 && !quotaFailure) {
           Logger.commandComplete(startTime, code, stdout.length);
           resolve(stdout.trim());
         } else {
           Logger.commandComplete(startTime, code);
           Logger.error(`Failed with exit code ${code}`);
-          const errorMessage = stderr.trim() || "Unknown error";
+          const errorMessage = stderr.trim() || (resourceExhausted ? "RESOURCE_EXHAUSTED" : "Unknown error");
           reject(
             new Error(`Command failed with exit code ${code}: ${errorMessage}`),
           );

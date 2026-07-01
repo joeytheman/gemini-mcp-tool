@@ -117,6 +117,18 @@ describe('executeCommand', () => {
     expect(Logger.error).toHaveBeenCalled();
   });
 
+  it('should reject when stderr reports RESOURCE_EXHAUSTED even on exit code 0', async () => {
+    const mockProc = createMockChildProcess();
+    mockSpawn.mockReturnValue(mockProc);
+
+    const promise = executeCommand('agy', ['--print', 'test']);
+
+    mockProc.stderr.emit('data', 'RESOURCE_EXHAUSTED: Quota exceeded');
+    mockProc.emit('close', 0);
+
+    await expect(promise).rejects.toThrow('RESOURCE_EXHAUSTED');
+  });
+
   it('should reject with "Unknown error" when stderr is empty', async () => {
     const mockProc = createMockChildProcess();
     mockSpawn.mockReturnValue(mockProc);
