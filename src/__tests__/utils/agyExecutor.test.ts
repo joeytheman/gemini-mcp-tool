@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// Mock logger
 vi.mock('../../utils/logger.js', () => ({
   Logger: {
     debug: vi.fn(),
@@ -12,13 +11,11 @@ vi.mock('../../utils/logger.js', () => ({
   },
 }));
 
-// Mock commandExecutor
 const mockExecuteCommand = vi.fn();
 vi.mock('../../utils/commandExecutor.js', () => ({
   executeCommand: (...args: any[]) => mockExecuteCommand(...args),
 }));
 
-// Mock responseCache
 const mockIsCacheEnabled = vi.fn().mockReturnValue(false);
 const mockGenerateCacheKey = vi.fn().mockReturnValue('mock-cache-key');
 const mockGetCachedResponse = vi.fn().mockReturnValue(undefined);
@@ -30,16 +27,24 @@ vi.mock('../../utils/responseCache.js', () => ({
   cacheResponse: (...args: any[]) => mockCacheResponse(...args),
 }));
 
-// Mock chunkCache
 vi.mock('../../utils/chunkCache.js', () => ({
   cacheChunks: vi.fn().mockReturnValue('chunk123'),
   getChunks: vi.fn().mockReturnValue(null),
 }));
 
-import { executeGeminiCLI, processChangeModeOutput } from '../../utils/geminiExecutor.js';
+const mockRecover = vi.fn();
+vi.mock('../../utils/agyTranscriptRecovery.js', () => ({
+  isRecoverableEmptyOutput: (s: string) => {
+    const t = s.trim();
+    return t === '' || t === 'Error: timed out waiting for response';
+  },
+  recoverFromTranscript: (...args: any[]) => mockRecover(...args),
+}));
+
+import { executeAgyCLI, processChangeModeOutput } from '../../utils/agyExecutor.js';
 import { CLI, MODELS, ERROR_MESSAGES } from '../../constants.js';
 
-describe('executeGeminiCLI', () => {
+describe('executeAgyCLI', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockIsCacheEnabled.mockReturnValue(false);
@@ -49,152 +54,212 @@ describe('executeGeminiCLI', () => {
   });
 
   describe('argument building', () => {
+    it('should use agy with the default Gemini 3.5 Flash model and print mode', async () => {
+      await executeAgyCLI('test', {});
+
+      expect(mockExecuteCommand).toHaveBeenCalledWith(
+        CLI.COMMANDS.AGY,
+        [CLI.FLAGS.MODEL, MODELS.DEFAULT, CLI.FLAGS.PRINT, 'test'],
+        undefined,
+        undefined
+      );
+    });
+
     it('should add model flag when specified', async () => {
-      await executeGeminiCLI('test', { model: 'gemini-3.1-flash-lite-preview' });
+      await executeAgyCLI('test', { model: 'Gemini 3.5 Flash (High)' });
 
       const args = mockExecuteCommand.mock.calls[0][1];
       expect(args).toContain(CLI.FLAGS.MODEL);
-      expect(args).toContain('gemini-3.1-flash-lite-preview');
+      expect(args).toContain('Gemini 3.5 Flash (High)');
     });
 
     it('should add sandbox flag when specified', async () => {
-      await executeGeminiCLI('test', { sandbox: true });
+      await executeAgyCLI('test', { sandbox: true });
 
       const args = mockExecuteCommand.mock.calls[0][1];
       expect(args).toContain(CLI.FLAGS.SANDBOX);
     });
 
-    it('should add yolo flag when specified', async () => {
-      await executeGeminiCLI('test', { yolo: true });
+    it('should map yolo to dangerously skip permissions', async () => {
+      await executeAgyCLI('test', { yolo: true });
 
       const args = mockExecuteCommand.mock.calls[0][1];
       expect(args).toContain(CLI.FLAGS.YOLO);
     });
 
-    it('should add debug flag when specified', async () => {
-      await executeGeminiCLI('test', { debug: true });
+    it('should map approvalMode yolo to dangerously skip permissions', async () => {
+      await executeAgyCLI('test', { approvalMode: 'yolo' });
 
       const args = mockExecuteCommand.mock.calls[0][1];
-      expect(args).toContain(CLI.FLAGS.DEBUG);
+      expect(args).toContain(CLI.FLAGS.YOLO);
     });
 
-    it('should add approval mode when specified', async () => {
-      await executeGeminiCLI('test', { approvalMode: 'auto_edit' });
+    it('should map includeDirectories array to repeated add-dir flags', async () => {
+      await executeAgyCLI('test', { includeDirectories: ['src', 'lib'] });
 
       const args = mockExecuteCommand.mock.calls[0][1];
-      expect(args).toContain(CLI.FLAGS.APPROVAL_MODE);
-      expect(args).toContain('auto_edit');
+      expect(args).toEqual([
+        CLI.FLAGS.MODEL,
+        MODELS.DEFAULT,
+        CLI.FLAGS.ADD_DIR,
+        'src',
+        CLI.FLAGS.ADD_DIR,
+        'lib',
+        CLI.FLAGS.PRINT,
+        'test',
+      ]);
     });
 
-    it('should add output format when specified', async () => {
-      await executeGeminiCLI('test', { outputFormat: 'json' });
+    it('should split includeDirectories string and map to repeated add-dir flags', async () => {
+      await executeAgyCLI('test', { includeDirectories: 'src, lib' });
 
       const args = mockExecuteCommand.mock.calls[0][1];
-      expect(args).toContain(CLI.FLAGS.OUTPUT_FORMAT);
-      expect(args).toContain('json');
+      expect(args).toContain(CLI.FLAGS.ADD_DIR);
+      expect(args.filter((arg: string) => arg === CLI.FLAGS.ADD_DIR)).toHaveLength(2);
+      expect(args).toContain('src');
+      expect(args).toContain('lib');
     });
 
-    it('should join includeDirectories array', async () => {
-      await executeGeminiCLI('test', { includeDirectories: ['src', 'lib'] });
+    it('should add print timeout when specified', async () => {
+      await executeAgyCLI('test', { printTimeout: '10m' });
 
       const args = mockExecuteCommand.mock.calls[0][1];
-      expect(args).toContain(CLI.FLAGS.INCLUDE_DIRECTORIES);
-      expect(args).toContain('src,lib');
+      expect(args).toContain(CLI.FLAGS.PRINT_TIMEOUT);
+      expect(args).toContain('10m');
     });
 
-    it('should pass includeDirectories string directly', async () => {
-      await executeGeminiCLI('test', { includeDirectories: 'src,lib' });
+    it('should map latest resume values to continue', async () => {
+      await executeAgyCLI('test', { resume: 'latest' });
 
       const args = mockExecuteCommand.mock.calls[0][1];
-      expect(args).toContain(CLI.FLAGS.INCLUDE_DIRECTORIES);
-      expect(args).toContain('src,lib');
+      expect(args).toContain(CLI.FLAGS.CONTINUE);
+      expect(args).not.toContain(CLI.FLAGS.CONVERSATION);
     });
 
-    it('should join extensions array', async () => {
-      await executeGeminiCLI('test', { extensions: ['ts', 'js'] });
+    it('should map conversation IDs to conversation flag', async () => {
+      await executeAgyCLI('test', { resume: 'conversation-123' });
 
       const args = mockExecuteCommand.mock.calls[0][1];
-      expect(args).toContain(CLI.FLAGS.EXTENSIONS);
-      expect(args).toContain('ts,js');
+      expect(args).toContain(CLI.FLAGS.CONVERSATION);
+      expect(args).toContain('conversation-123');
     });
 
-    it('should add resume flag when specified', async () => {
-      await executeGeminiCLI('test', { resume: 'latest' });
+    it('should reject blank resume values', async () => {
+      await expect(executeAgyCLI('test', { resume: '   ' }))
+        .rejects.toThrow('resume must be true, latest, continue, or a non-empty conversation ID');
 
-      const args = mockExecuteCommand.mock.calls[0][1];
-      expect(args).toContain(CLI.FLAGS.RESUME);
-      expect(args).toContain('latest');
+      expect(mockExecuteCommand).not.toHaveBeenCalled();
     });
 
-    it('should pass prompt as positional argument', async () => {
-      await executeGeminiCLI('analyze @file.ts', {});
+    it('should pass prompt through --print rather than a positional prompt', async () => {
+      await executeAgyCLI('analyze @file.ts', {});
 
       const args = mockExecuteCommand.mock.calls[0][1];
+      expect(args[args.length - 2]).toBe(CLI.FLAGS.PRINT);
       expect(args[args.length - 1]).toBe('analyze @file.ts');
-      expect(args).not.toContain(CLI.FLAGS.PROMPT);
     });
 
     it('should pass cwd when specified', async () => {
-      await executeGeminiCLI('test', { cwd: '/some/path' });
+      await executeAgyCLI('test', { cwd: '/some/path' });
 
       const cwd = mockExecuteCommand.mock.calls[0][3];
       expect(cwd).toBe('/some/path');
     });
 
-    it('should handle string options for backward compatibility', async () => {
-      await executeGeminiCLI('test', 'gemini-3.1-flash-lite-preview');
+    it('should handle string options for model compatibility', async () => {
+      await executeAgyCLI('test', 'Gemini 3.5 Flash (Low)');
 
       const args = mockExecuteCommand.mock.calls[0][1];
       expect(args).toContain(CLI.FLAGS.MODEL);
-      expect(args).toContain('gemini-3.1-flash-lite-preview');
+      expect(args).toContain('Gemini 3.5 Flash (Low)');
     });
   });
 
-  describe('fallback logic', () => {
-    it('should retry with Flash on quota error with non-Flash model', async () => {
-      mockExecuteCommand
-        .mockRejectedValueOnce(new Error(`Command failed: ${ERROR_MESSAGES.QUOTA_EXCEEDED}`))
-        .mockResolvedValueOnce('Flash response');
-
-      const result = await executeGeminiCLI('test', { model: 'gemini-3.1-pro-preview' });
-
-      expect(result).toBe('Flash response');
-      expect(mockExecuteCommand).toHaveBeenCalledTimes(2);
-
-      // Second call should use Flash model
-      const fallbackArgs = mockExecuteCommand.mock.calls[1][1];
-      expect(fallbackArgs).toContain(MODELS.FLASH);
+  describe('unsupported legacy Gemini CLI options', () => {
+    it.each([
+      [{ debug: true }, 'debug'],
+      [{ outputFormat: 'json' }, 'outputFormat'],
+      [{ extensions: ['ts'] }, 'extensions'],
+      [{ promptInteractive: 'hello' }, 'promptInteractive'],
+      [{ approvalMode: 'auto_edit' }, 'approvalMode:auto_edit'],
+    ])('should reject unsupported option %s', async (options, optionName) => {
+      await expect(executeAgyCLI('test', options as any)).rejects.toThrow(String(optionName));
+      expect(mockExecuteCommand).not.toHaveBeenCalled();
     });
+  });
 
-    it('should throw without fallback when already using Flash', async () => {
-      mockExecuteCommand
-        .mockRejectedValueOnce(new Error(`Command failed: ${ERROR_MESSAGES.QUOTA_EXCEEDED}`));
+  describe('no fallback behavior', () => {
+    it('should not retry when the agy backend reports resource exhaustion', async () => {
+      mockExecuteCommand.mockRejectedValueOnce(new Error('RESOURCE_EXHAUSTED'));
 
-      await expect(
-        executeGeminiCLI('test', { model: MODELS.FLASH })
-      ).rejects.toThrow(ERROR_MESSAGES.QUOTA_EXCEEDED);
+      await expect(executeAgyCLI('test', { model: 'Gemini 3.5 Flash (Medium)' }))
+        .rejects.toThrow('RESOURCE_EXHAUSTED');
 
       expect(mockExecuteCommand).toHaveBeenCalledTimes(1);
     });
 
-    it('should throw fallback error when Flash fallback also fails', async () => {
-      mockExecuteCommand
-        .mockRejectedValueOnce(new Error(`${ERROR_MESSAGES.QUOTA_EXCEEDED}`))
-        .mockRejectedValueOnce(new Error('Flash also failed'));
+    it('should return install guidance when agy is missing', async () => {
+      mockExecuteCommand.mockRejectedValueOnce(new Error('Failed to spawn command: ENOENT'));
 
-      await expect(
-        executeGeminiCLI('test', { model: 'gemini-3.1-pro-preview' })
-      ).rejects.toThrow('fallback also failed');
+      await expect(executeAgyCLI('test', {})).rejects.toThrow(ERROR_MESSAGES.AGY_NOT_FOUND);
+    });
+  });
+
+  describe('output recovery', () => {
+    it('recovers from the transcript when stdout is empty', async () => {
+      mockExecuteCommand.mockResolvedValue('');
+      mockRecover.mockReturnValue('RECOVERED ANSWER');
+
+      const result = await executeAgyCLI('test', {});
+
+      expect(result).toBe('RECOVERED ANSWER');
+      expect(mockRecover).toHaveBeenCalled();
     });
 
-    it('should not retry for non-quota errors', async () => {
-      mockExecuteCommand.mockRejectedValueOnce(new Error('network error'));
+    it('recovers when stdout is the timeout sentinel', async () => {
+      mockExecuteCommand.mockResolvedValue('Error: timed out waiting for response');
+      mockRecover.mockReturnValue('RECOVERED ANSWER');
 
-      await expect(
-        executeGeminiCLI('test', {})
-      ).rejects.toThrow('network error');
+      const result = await executeAgyCLI('test', {});
 
-      expect(mockExecuteCommand).toHaveBeenCalledTimes(1);
+      expect(result).toBe('RECOVERED ANSWER');
+    });
+
+    it('throws AGY_NO_OUTPUT for the timeout sentinel when recovery fails', async () => {
+      mockIsCacheEnabled.mockReturnValue(true);
+      mockExecuteCommand.mockResolvedValue('Error: timed out waiting for response');
+      mockRecover.mockReturnValue(null);
+
+      await expect(executeAgyCLI('test', {})).rejects.toThrow(ERROR_MESSAGES.AGY_NO_OUTPUT);
+      expect(mockCacheResponse).not.toHaveBeenCalled();
+    });
+
+    it('returns empty (soft) and does not cache for genuinely empty output without recovery', async () => {
+      mockIsCacheEnabled.mockReturnValue(true);
+      mockExecuteCommand.mockResolvedValue('');
+      mockRecover.mockReturnValue(null);
+
+      const result = await executeAgyCLI('test', {});
+
+      expect(result).toBe('');
+      expect(mockCacheResponse).not.toHaveBeenCalled();
+    });
+
+    it('does not attempt recovery for normal output', async () => {
+      mockExecuteCommand.mockResolvedValue('a real answer');
+
+      const result = await executeAgyCLI('test', {});
+
+      expect(result).toBe('a real answer');
+      expect(mockRecover).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('safety guards', () => {
+    it('refuses yolo with a filesystem-root workingDirectory', async () => {
+      await expect(executeAgyCLI('test', { yolo: true, cwd: '/' }))
+        .rejects.toThrow(ERROR_MESSAGES.UNSAFE_ROOT_YOLO);
+      expect(mockExecuteCommand).not.toHaveBeenCalled();
     });
   });
 
@@ -203,7 +268,7 @@ describe('executeGeminiCLI', () => {
       mockIsCacheEnabled.mockReturnValue(true);
       mockGetCachedResponse.mockReturnValue('cached result');
 
-      const result = await executeGeminiCLI('test', {});
+      const result = await executeAgyCLI('test', {});
 
       expect(result).toBe('cached result');
       expect(mockExecuteCommand).not.toHaveBeenCalled();
@@ -214,7 +279,7 @@ describe('executeGeminiCLI', () => {
       mockGetCachedResponse.mockReturnValue(undefined);
       mockExecuteCommand.mockResolvedValue('fresh result');
 
-      await executeGeminiCLI('test', {});
+      await executeAgyCLI('test', {});
 
       expect(mockCacheResponse).toHaveBeenCalledWith('mock-cache-key', 'fresh result');
     });
@@ -224,28 +289,15 @@ describe('executeGeminiCLI', () => {
       mockGetCachedResponse.mockReturnValue(undefined);
       mockExecuteCommand.mockResolvedValue('edit result');
 
-      await executeGeminiCLI('test', { changeMode: true });
+      await executeAgyCLI('test', { changeMode: true });
 
       expect(mockCacheResponse).not.toHaveBeenCalled();
-    });
-
-    it('should cache successful fallback responses when cache is enabled', async () => {
-      mockIsCacheEnabled.mockReturnValue(true);
-      mockGetCachedResponse.mockReturnValue(undefined);
-      mockExecuteCommand
-        .mockRejectedValueOnce(new Error(`${ERROR_MESSAGES.QUOTA_EXCEEDED}`))
-        .mockResolvedValueOnce('fallback result');
-
-      const result = await executeGeminiCLI('test', { model: 'gemini-3.1-pro-preview' });
-
-      expect(result).toBe('fallback result');
-      expect(mockCacheResponse).toHaveBeenCalledWith('mock-cache-key', 'fallback result');
     });
 
     it('should not use cache when disabled', async () => {
       mockIsCacheEnabled.mockReturnValue(false);
 
-      await executeGeminiCLI('test', {});
+      await executeAgyCLI('test', {});
 
       expect(mockGetCachedResponse).not.toHaveBeenCalled();
     });
@@ -279,13 +331,6 @@ const x = 2;
   });
 
   it('should return validation errors for invalid edits', async () => {
-    // Create input that parses to an edit with both oldCode and newCode empty
-    // This is tricky because the parser requires specific format - use legacy format
-    // Actually, let's just test through the flow. An edit with empty old+new
-    // isn't easily created through parsing (parser trims but keeps content).
-    // Instead, test a scenario that validates correctly: multi-line edits with bad line numbers won't happen from parser.
-    // The parser always produces valid line ranges, so validation errors from parser output are unlikely.
-    // Let's just verify the function handles the flow for valid edits.
     const raw = `**FILE: src/a.ts:10**
 \`\`\`
 OLD:
@@ -340,7 +385,6 @@ new code
 
   it('should add summary for cached chunk 1 with >5 edits', async () => {
     const { getChunks } = await import('../../utils/chunkCache.js');
-    // Create chunk 1 with >5 edits to trigger the summary prepend
     const manyEdits = Array.from({ length: 6 }, (_, i) => ({
       filename: `file${i}.ts`,
       oldStartLine: 1,
@@ -381,7 +425,6 @@ new code
   });
 
   it('should cache multi-chunk results and return first chunk with summary', async () => {
-    // Generate >5 edits across enough content to produce multiple chunks
     const editBlocks = Array.from({ length: 7 }, (_, i) =>
 `**FILE: src/file${i}.ts:1**
 \`\`\`
@@ -394,9 +437,7 @@ ${'y'.repeat(3000)}
 
     const result = await processChangeModeOutput(editBlocks, undefined, undefined, 'original prompt');
 
-    // Should contain changeMode output
     expect(result).toContain('[CHANGEMODE OUTPUT');
-    // With >5 edits, should have summary
     expect(result).toContain('ChangeMode Summary');
     expect(result).toContain('Total edits: 7');
   });

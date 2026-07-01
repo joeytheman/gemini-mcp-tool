@@ -108,13 +108,25 @@ describe('executeCommand', () => {
     const mockProc = createMockChildProcess();
     mockSpawn.mockReturnValue(mockProc);
 
-    const promise = executeCommand('gemini', ['-p', 'test']);
+    const promise = executeCommand('agy', ['--print', 'test']);
 
     mockProc.stderr.emit('data', 'RESOURCE_EXHAUSTED: Quota exceeded');
     mockProc.emit('close', 1);
 
     await expect(promise).rejects.toThrow();
     expect(Logger.error).toHaveBeenCalled();
+  });
+
+  it('should reject when stderr reports RESOURCE_EXHAUSTED even on exit code 0', async () => {
+    const mockProc = createMockChildProcess();
+    mockSpawn.mockReturnValue(mockProc);
+
+    const promise = executeCommand('agy', ['--print', 'test']);
+
+    mockProc.stderr.emit('data', 'RESOURCE_EXHAUSTED: Quota exceeded');
+    mockProc.emit('close', 0);
+
+    await expect(promise).rejects.toThrow('RESOURCE_EXHAUSTED');
   });
 
   it('should reject with "Unknown error" when stderr is empty', async () => {
@@ -145,12 +157,12 @@ describe('executeCommand', () => {
     const mockProc = createMockChildProcess();
     mockSpawn.mockReturnValue(mockProc);
 
-    const promise = executeCommand('gemini', ['-m', 'pro', '-p', 'test']);
+    const promise = executeCommand('agy', ['--model', 'Gemini 3.5 Flash (Medium)', '--print', 'test']);
 
     mockProc.emit('close', 0);
     await promise;
 
-    expect(mockSpawn).toHaveBeenCalledWith('gemini', ['-m', 'pro', '-p', 'test'], {
+    expect(mockSpawn).toHaveBeenCalledWith('agy', ['--model', 'Gemini 3.5 Flash (Medium)', '--print', 'test'], {
       env: process.env,
       shell: false,
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -161,12 +173,12 @@ describe('executeCommand', () => {
     const mockProc = createMockChildProcess();
     mockSpawn.mockReturnValue(mockProc);
 
-    const promise = executeCommand('gemini', ['-p', 'test'], undefined, '/some/dir');
+    const promise = executeCommand('agy', ['--print', 'test'], undefined, '/some/dir');
 
     mockProc.emit('close', 0);
     await promise;
 
-    expect(mockSpawn).toHaveBeenCalledWith('gemini', ['-p', 'test'], {
+    expect(mockSpawn).toHaveBeenCalledWith('agy', ['--print', 'test'], {
       env: process.env,
       shell: false,
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -178,12 +190,32 @@ describe('executeCommand', () => {
     const mockProc = createMockChildProcess();
     mockSpawn.mockReturnValue(mockProc);
 
-    const promise = executeCommand('gemini', ['-p', 'test']);
+    const promise = executeCommand('agy', ['--print', 'test']);
 
     mockProc.emit('close', 0);
     await promise;
 
     const spawnOptions = mockSpawn.mock.calls[0][2];
     expect(spawnOptions).not.toHaveProperty('cwd');
+  });
+
+  it('should never use shell spawning, including on Windows', async () => {
+    const originalPlatform = process.platform;
+    Object.defineProperty(process, 'platform', { value: 'win32' });
+
+    try {
+      const mockProc = createMockChildProcess();
+      mockSpawn.mockReturnValue(mockProc);
+
+      const promise = executeCommand('agy', ['--print', 'hello & goodbye']);
+
+      mockProc.emit('close', 0);
+      await promise;
+
+      const spawnOptions = mockSpawn.mock.calls[0][2];
+      expect(spawnOptions.shell).toBe(false);
+    } finally {
+      Object.defineProperty(process, 'platform', { value: originalPlatform });
+    }
   });
 });

@@ -4,12 +4,12 @@ Execute code safely in an isolated environment.
 
 ## What is Sandbox Mode?
 
-Sandbox mode allows Gemini to write and test code in a secure, isolated environment without affecting your system.
+Sandbox mode maps to Antigravity CLI's `--sandbox` flag, which runs with terminal restrictions enabled.
 
 ## Basic Usage
 
 ```
-/gemini-cli:sandbox create a Python script that sorts a list
+/ask-gemini prompt:create a Python script that sorts a list sandbox:true
 ```
 
 ## How It Works
@@ -23,25 +23,24 @@ Sandbox mode allows Gemini to write and test code in a secure, isolated environm
 
 ### Algorithm Testing
 ```
-/gemini-cli:sandbox implement and test quicksort in JavaScript
+/ask-gemini prompt:implement and test quicksort in JavaScript sandbox:true
 ```
 
 ### Data Processing
 ```
-/gemini-cli:sandbox parse this CSV and show statistics: [data]
+/ask-gemini prompt:parse this CSV and show statistics: [data] sandbox:true
 ```
 
 ### Proof of Concepts
 ```
-/gemini-cli:sandbox create a working web scraper example
+/ask-gemini prompt:create a working web scraper example sandbox:true
 ```
 
 ## Safety Features
 
-- **Isolated Execution**: No access to your file system
-- **Resource Limits**: CPU and memory constraints
-- **Time Limits**: Prevents infinite loops
-- **No Network**: Cannot make external requests
+- **Terminal Restrictions**: Uses Antigravity's sandbox mode
+- **Permission Controls**: Avoid `yolo` unless you explicitly want to auto-approve tool requests
+- **Scoped Workspace**: Use `includeDirectories` deliberately when extra context is needed
 
 ## Supported Languages
 
@@ -83,24 +82,23 @@ show example requests and responses
 
 ## Limitations
 
-- No file system access
-- No network requests
-- Limited execution time (30s)
-- Memory limit (512MB)
+- Sandbox behavior is controlled by Antigravity CLI
+- Some prompts may still require permission decisions unless `yolo` is enabled
+- For long tasks, use `printTimeout` to increase the `agy --print` wait time
 
 ## Examples
 
 ### Testing Algorithms
 ```
-/gemini-cli:sandbox benchmark bubble sort vs quick sort with 1000 items
+/ask-gemini prompt:benchmark bubble sort vs quick sort with 1000 items sandbox:true
 ```
 
 ### Learning Code
 ```
-/gemini-cli:sandbox show me how promises work in JavaScript with examples
+/ask-gemini prompt:show me how promises work in JavaScript with examples sandbox:true
 ```
 
 ### Debugging
 ```
-/gemini-cli:sandbox why does this code fail: [paste code]
+/ask-gemini prompt:why does this code fail: [paste code] sandbox:true
 ```

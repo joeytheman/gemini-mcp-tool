@@ -16,23 +16,24 @@ Windows testing is underway, some users have reported success and other failures
 
 ### Is it free?
 The tool is open source and free. You need:
-- Gemini API key (has free tier) or Google Account
+- Antigravity CLI (`agy`) configured with your Google account
 - Claude Desktop or Claude Code or any MCP client
 
 ## Setup
 
-### Do I need to install Gemini CLI separately?
-Yes, install it with:
+### Do I need to install Antigravity CLI separately?
+Yes, `agy` is required:
 ```bash
-npm install -g @google/gemini-cli
+agy install
+agy --version
 ```
-Then, run "gemini" and complete auth.
+Then run `agy models` and complete any setup prompts.
 
 ### Can I use this with Claude Code?
 Yes! It works with both Claude Desktop and Claude Code.
 
 ### What Node.js version do I need?
-Node.js v16.0.0 or higher.
+Node.js v18.0.0 or higher.
 
 ## Usage
 
@@ -47,9 +48,9 @@ It's how you reference files for analysis:
 Yes! Gemini's large context window allows analyzing entire codebases.
 
 ### Which model should I use?
-- **Daily work**: Gemini Pro
-- **Large analysis**: Gemini Pro
-- **Quick tasks**: Gemini Flash
+- **Daily work**: Gemini 3.5 Flash (Medium)
+- **Large analysis**: Gemini 3.5 Flash (High)
+- **Quick tasks**: Gemini 3.5 Flash (Low)
 
 ## Features
 
@@ -57,13 +58,13 @@ Yes! Gemini's large context window allows analyzing entire codebases.
 Any language code or human.
 
 ### Does it work offline?
-No, it requires internet to connect to Gemini API.
+No, it requires internet access through Antigravity CLI.
 
 ## Troubleshooting
 
 ### Why is it slow?
 - Large files take time to process
-- Try using Flash model for speed
+- Try `Gemini 3.5 Flash (Low)` for speed
 - Check your internet connection
 
 ### Can I use my own models?
@@ -82,7 +83,7 @@ Only when you explicitly use Gemini commands. Code is processed according to Goo
 - We never look at or touch your keys!
 
 ### Can I use this for proprietary code?
-Check your organization's policies and Google's Gemini API terms of service.
+Check your organization's policies and Google's Antigravity and Gemini terms or privacy policy.
 
 ## Advanced
 

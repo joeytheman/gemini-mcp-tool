@@ -1,25 +1,8 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { z } from 'zod';
+import { describe, it, expect } from 'vitest';
+import { askGeminiArgsSchema } from '../tools/ask-gemini.tool.js';
 
 describe('ask-gemini Tool', () => {
   describe('Argument Schema Validation', () => {
-    const askGeminiArgsSchema = z.object({
-      prompt: z.string().min(1),
-      model: z.string().optional(),
-      sandbox: z.boolean().default(false),
-      changeMode: z.boolean().default(false),
-      chunkIndex: z.union([z.number(), z.string()]).optional(),
-      chunkCacheKey: z.string().optional(),
-      yolo: z.boolean().default(false),
-      approvalMode: z.enum(['default', 'auto_edit', 'yolo']).optional(),
-      outputFormat: z.enum(['text', 'json', 'stream-json']).optional(),
-      includeDirectories: z.union([z.string(), z.array(z.string())]).optional(),
-      debug: z.boolean().default(false),
-      promptInteractive: z.string().optional(),
-      extensions: z.union([z.string(), z.array(z.string())]).optional(),
-      resume: z.string().optional(),
-    });
-
     it('should accept valid minimal arguments', () => {
       const result = askGeminiArgsSchema.parse({ prompt: 'test prompt' });
       expect(result.prompt).toBe('test prompt');
@@ -27,25 +10,44 @@ describe('ask-gemini Tool', () => {
       expect(result.changeMode).toBe(false);
     });
 
-    it('should accept all optional flags', () => {
+    it('should accept supported agy optional flags', () => {
       const result = askGeminiArgsSchema.parse({
         prompt: 'test prompt',
-        model: 'gemini-3.1-flash-lite-preview',
+        model: 'Gemini 3.5 Flash (Medium)',
         sandbox: true,
         changeMode: true,
         yolo: true,
-        approvalMode: 'auto_edit',
-        outputFormat: 'json',
-        debug: true,
+        includeDirectories: ['src', 'tests'],
+        printTimeout: '10m',
+        resume: true,
+        workingDirectory: '/tmp/project',
       });
 
-      expect(result.model).toBe('gemini-3.1-flash-lite-preview');
+      expect(result.model).toBe('Gemini 3.5 Flash (Medium)');
       expect(result.sandbox).toBe(true);
       expect(result.changeMode).toBe(true);
       expect(result.yolo).toBe(true);
+      expect(result.includeDirectories).toEqual(['src', 'tests']);
+      expect(result.printTimeout).toBe('10m');
+      expect(result.resume).toBe(true);
+      expect(result.workingDirectory).toBe('/tmp/project');
+    });
+
+    it('should accept legacy fields so implementation can return explicit unsupported errors', () => {
+      const result = askGeminiArgsSchema.parse({
+        prompt: 'test prompt',
+        approvalMode: 'auto_edit',
+        outputFormat: 'json',
+        debug: true,
+        extensions: ['ts', 'js'],
+        promptInteractive: 'continue after this',
+      });
+
       expect(result.approvalMode).toBe('auto_edit');
       expect(result.outputFormat).toBe('json');
       expect(result.debug).toBe(true);
+      expect(result.extensions).toEqual(['ts', 'js']);
+      expect(result.promptInteractive).toBe('continue after this');
     });
 
     it('should reject missing prompt', () => {
@@ -114,6 +116,14 @@ describe('ask-gemini Tool', () => {
       expect(result.resume).toBe('latest');
     });
 
+    it('should accept boolean resume parameter', () => {
+      const result = askGeminiArgsSchema.parse({
+        prompt: 'test',
+        resume: true,
+      });
+      expect(result.resume).toBe(true);
+    });
+
     it('should accept chunkIndex as number', () => {
       const result = askGeminiArgsSchema.parse({
         prompt: 'test',
@@ -132,13 +142,6 @@ describe('ask-gemini Tool', () => {
   });
 
   describe('Flag Combinations', () => {
-    const askGeminiArgsSchema = z.object({
-      prompt: z.string().min(1),
-      sandbox: z.boolean().default(false),
-      yolo: z.boolean().default(false),
-      approvalMode: z.enum(['default', 'auto_edit', 'yolo']).optional(),
-    });
-
     it('should allow sandbox with yolo', () => {
       const result = askGeminiArgsSchema.parse({
         prompt: 'test',
@@ -149,7 +152,7 @@ describe('ask-gemini Tool', () => {
       expect(result.yolo).toBe(true);
     });
 
-    it('should allow approvalMode to override yolo', () => {
+    it('should allow legacy approvalMode through schema for executor validation', () => {
       const result = askGeminiArgsSchema.parse({
         prompt: 'test',
         yolo: true,
@@ -157,15 +160,10 @@ describe('ask-gemini Tool', () => {
       });
       expect(result.yolo).toBe(true);
       expect(result.approvalMode).toBe('auto_edit');
-      // Note: In actual implementation, approvalMode should take precedence
     });
   });
 
   describe('Error Messages', () => {
-    const askGeminiArgsSchema = z.object({
-      prompt: z.string().min(1),
-    });
-
     it('should provide clear error for missing prompt', () => {
       try {
         askGeminiArgsSchema.parse({});

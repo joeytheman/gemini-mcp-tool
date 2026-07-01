@@ -1,27 +1,27 @@
 import { LRUCache } from 'lru-cache';
 import { createHash } from 'crypto';
 import { Logger } from './logger.js';
-import { GeminiCLIOptions } from './geminiExecutor.js';
+import type { AgyCLIOptions } from './agyExecutor.js';
 
 /**
  * Whether LRU response caching is enabled.
- * Opt-in via environment variable GEMINI_CACHE_ENABLED=true.
+ * Opt-in via environment variable AGY_CACHE_ENABLED=true.
  * Defaults to false — users must explicitly enable caching.
  */
 export const isCacheEnabled = (): boolean =>
-  process.env.GEMINI_CACHE_ENABLED === 'true';
+  process.env.AGY_CACHE_ENABLED === 'true';
 
 /**
- * LRU Cache for Gemini API responses
+ * LRU Cache for agy-backed Gemini responses
  * Caches responses to identical prompts with identical options
  *
  * Benefits:
  * - Near-instant responses for repeated queries
- * - Reduces API quota consumption
+ * - Reduces repeated CLI calls
  * - 30-minute TTL ensures fresh data
  * - 10MB max size prevents memory bloat
  *
- * Disabled by default. Enable via GEMINI_CACHE_ENABLED=true env var.
+ * Disabled by default. Enable via AGY_CACHE_ENABLED=true env var.
  */
 const responseCache = new LRUCache<string, string>({
   max: 100,  // Cache up to 100 recent responses
@@ -36,7 +36,7 @@ const responseCache = new LRUCache<string, string>({
 /**
  * Generate a cache key from prompt and options
  */
-export function generateCacheKey(prompt: string, options: GeminiCLIOptions): string {
+export function generateCacheKey(prompt: string, options: AgyCLIOptions): string {
   // Create deterministic hash of prompt + options
   const cacheInput = JSON.stringify({
     prompt,
@@ -48,9 +48,11 @@ export function generateCacheKey(prompt: string, options: GeminiCLIOptions): str
     outputFormat: options.outputFormat,
     includeDirectories: options.includeDirectories,
     debug: options.debug,
+    printTimeout: options.printTimeout,
     promptInteractive: options.promptInteractive,
     extensions: options.extensions,
-    resume: options.resume
+    resume: options.resume,
+    cwd: options.cwd
   });
 
   return createHash('sha256').update(cacheInput).digest('hex');

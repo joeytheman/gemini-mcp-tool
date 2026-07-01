@@ -29,8 +29,8 @@ import {
 
 const server = new Server(
   {
-    name: "gemini-cli-mcp",
-    version: "1.1.4",
+    name: "gemini-mcp",
+    version: "2.0.0",
   },{
     capabilities: {
       tools: {},

@@ -1,25 +1,14 @@
 # Changelog
 
 ## [Unreleased]
-- Cleaned up stale model documentation: removed obsolete 45k token bug references, Flash-8B, flash-thinking, and hardcoded token counts; balanced model recommendations between Pro and Flash
-- Updated Flash fallback model from `gemini-3-flash-preview` to `gemini-3.1-flash-lite-preview` (2.5x faster TTFT, 45% faster output, $0.25/1M input)
-- Replaced hardcoded model string in `commandExecutor.ts` with `MODELS.FLASH` constant
-- Updated default model to `gemini-3-pro-preview` [PR #54](https://github.com/jamubc/gemini-mcp-tool/pull/54)
-- Added MCP tool annotations to all 6 tools per [MCP specification](https://spec.modelcontextprotocol.io/specification/2025-03-26/server/tools/#annotations) (`readOnlyHint`, `openWorldHint`, `idempotentHint`) [PR #46](https://github.com/jamubc/gemini-mcp-tool/pull/46)
-- Resolved npm audit vulnerabilities (14 → 7 remaining, all dev-only `lodash-es` with no fix available)
-  - Upgraded `@modelcontextprotocol/sdk` from 0.5.x to 1.25.x (high severity)
-  - Removed unused `ai` dependency and its transitive `jsondiffpatch` vulnerability
-  - Added `esbuild` override to fix dev server request vulnerability
-  - Bumped `vitepress` to ^1.6.4 and `mermaid` to ^11.12.2
-  - Bumped minimum Node.js engine from 16 to 18 (required by SDK 1.x)
-- Added LRU response cache for Gemini API responses (opt-in via `GEMINI_CACHE_ENABLED=true` env var) [PR #44](https://github.com/jamubc/gemini-mcp-tool/pull/44)
-- Added extended CLI flags: yolo, approvalMode, outputFormat, debug, includeDirectories, extensions, resume [PR #44](https://github.com/jamubc/gemini-mcp-tool/pull/44)
-- Improved command execution performance with O(n) array buffers [PR #44](https://github.com/jamubc/gemini-mcp-tool/pull/44)
-- Added `buildGeminiArgs()` helper and `GeminiCLIOptions` interface to eliminate code duplication [PR #44](https://github.com/jamubc/gemini-mcp-tool/pull/44)
-- Added vitest test suite with schema validation, registry, and server tests [PR #44](https://github.com/jamubc/gemini-mcp-tool/pull/44)
-- Fixed Windows compatibility: `shell: true` on win32 for `.cmd` executables [PR #43](https://github.com/jamubc/gemini-mcp-tool/pull/43)
-- Replaced deprecated `-p` flag with positional prompt for Gemini CLI v0.18+ [PR #43](https://github.com/jamubc/gemini-mcp-tool/pull/43)
-- Added `workingDirectory` parameter to ask-gemini for cross-drive access on Windows [PR #43](https://github.com/jamubc/gemini-mcp-tool/pull/43)
+
+## [2.0.0]
+- Breaking: switched runtime execution to Antigravity CLI (`agy`) while keeping the MCP-facing `ask-gemini` workflow.
+- Default model is now `Gemini 3.5 Flash (Medium)`.
+- Added support for `agy` options: `sandbox`, `yolo`, `includeDirectories`, `printTimeout`, `resume`, and `workingDirectory`.
+- Removed runtime fallback behavior; unsupported legacy options now fail explicitly.
+- Cache opt-in now uses `AGY_CACHE_ENABLED=true`.
+- `Help` now returns `agy --help`.
 
 ## [1.1.3]
 - "gemini reads, claude edits"

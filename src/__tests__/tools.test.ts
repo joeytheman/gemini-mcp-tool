@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { toolRegistry, getToolDefinitions, toolExists, getPromptDefinitions } from '../tools/index.js';
+import { CLI } from '../constants.js';
 
 describe('Tool Registry', () => {
   describe('getToolDefinitions', () => {
@@ -126,6 +127,7 @@ describe('Tool Registry', () => {
       expect(properties).toHaveProperty('changeMode');
       expect(properties).toHaveProperty('yolo');
       expect(properties).toHaveProperty('approvalMode');
+      expect(properties).toHaveProperty('printTimeout');
     });
 
     it('brainstorm should have methodology parameter', () => {
@@ -157,6 +159,13 @@ describe('Tool Registry', () => {
       expect(brainstorm?.category).toBe('gemini');
       expect(ping?.category).toBe('simple');
       expect(fetchChunk?.category).toBe('utility');
+    });
+  });
+
+  describe('Runtime command guard', () => {
+    it('should use agy as the only AI CLI command', () => {
+      expect(CLI.COMMANDS.AGY).toBe('agy');
+      expect(Object.values(CLI.COMMANDS)).not.toContain('gemini');
     });
   });
 });

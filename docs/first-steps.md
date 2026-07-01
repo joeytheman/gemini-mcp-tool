@@ -5,14 +5,14 @@ Once installed, here's how to get started with Gemini MCP Tool.
 ## Test Connection
 
 ```
-/gemini-cli:ping "Hello from Gemini!"
+/ping "Hello from Gemini!"
 ```
 
 ## Basic File Analysis
 
 Analyze a single file:
 ```
-/gemini-cli:analyze @README.md summarize this
+/ask-gemini prompt:@README.md summarize this
 ```
 
 ## Natural Language Usage
@@ -26,7 +26,7 @@ Just ask naturally:
 
 Test code safely:
 ```
-/gemini-cli:sandbox create a Python script that generates fibonacci numbers
+/ask-gemini prompt:create a Python script that generates fibonacci numbers sandbox:true
 ```
 
 ## Next Steps

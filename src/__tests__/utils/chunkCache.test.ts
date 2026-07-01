@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 
 // Mock logger
 vi.mock('../../utils/logger.js', () => ({
@@ -17,7 +19,7 @@ const mockFileStats = new Map<string, { mtimeMs: number }>();
 
 vi.mock('fs', () => ({
   existsSync: vi.fn((filePath: string) => {
-    return mockFileStore.has(filePath) || filePath.endsWith('gemini-mcp-chunks');
+    return mockFileStore.has(filePath) || filePath.endsWith('agy-mcp-chunks');
   }),
   mkdirSync: vi.fn(),
   writeFileSync: vi.fn((filePath: string, content: string) => {
@@ -132,6 +134,32 @@ describe('chunkCache', () => {
       const result = getChunks('nonexistent');
       expect(result).toBeNull();
     });
+
+    it('should reject a traversal cache key without touching the filesystem', () => {
+      const result = getChunks('../../etc/passwd');
+      expect(result).toBeNull();
+      expect(fs.existsSync).not.toHaveBeenCalled();
+      expect(fs.unlinkSync).not.toHaveBeenCalled();
+    });
+
+    it('should reject keys that are not exactly 8 lowercase hex chars', () => {
+      expect(getChunks('ABCDEF12')).toBeNull(); // uppercase
+      expect(getChunks('abcdef1')).toBeNull();  // 7 chars
+      expect(getChunks('abcdef123')).toBeNull(); // 9 chars
+      expect(getChunks('xyz12345')).toBeNull(); // non-hex
+      expect(fs.existsSync).not.toHaveBeenCalled();
+    });
+
+    it('should return null on parse error WITHOUT deleting the file', () => {
+      const cacheDir = path.join(os.tmpdir(), 'agy-mcp-chunks');
+      const filePath = path.join(cacheDir, 'abcdef12.json');
+      mockFileStore.set(filePath, 'corrupt{not valid json');
+      mockFileStats.set(filePath, { mtimeMs: Date.now() });
+
+      const result = getChunks('abcdef12');
+      expect(result).toBeNull();
+      expect(fs.unlinkSync).not.toHaveBeenCalled();
+    });
   });
 
   describe('clearCache', () => {
@@ -153,7 +181,7 @@ describe('chunkCache', () => {
       expect(stats.size).toBe(3);
       expect(stats.ttl).toBe(10 * 60 * 1000);
       expect(stats.maxSize).toBe(50);
-      expect(stats.cacheDir).toContain('gemini-mcp-chunks');
+      expect(stats.cacheDir).toContain('agy-mcp-chunks');
     });
   });
 });
