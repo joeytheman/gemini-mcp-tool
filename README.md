@@ -28,11 +28,15 @@ This is a simple Model Context Protocol (MCP) server that lets AI assistants ask
 
 **Goal**: Use Gemini's analysis capabilities directly from Codex or Claude Code for reviews, critiques, and large-file questions.
 
+## What's New in 2.0.1
+
+- **Gemini 3.1 Pro support** — `agy models` now exposes `Gemini 3.1 Pro (Low)` and `Gemini 3.1 Pro (High)`. The default model is now **Gemini 3.1 Pro (High)** (previously Gemini 3.5 Flash (Medium)). Pass `model: "Gemini 3.5 Flash (Low)"`, `"Gemini 3.5 Flash (Medium)"`, or `"Gemini 3.5 Flash (High)"` if you want the faster, cheaper Flash tiers instead.
+
 ## What's New in 2.0
 
 Version 2.0 moves the Gemini backend from the retired Gemini CLI/API path to Google's **Antigravity CLI (`agy`)** and brings the MCP-facing `ask-gemini` workflow along with several capabilities:
 
-- **Antigravity backend** — Gemini is reached through `agy --print`. The default model is **Gemini 3.5 Flash (Medium)**, with verified Low / Medium / High Flash tiers.
+- **Antigravity backend** — Gemini is reached through `agy --print`.
 - **Opt-in response caching** — LRU cache (30-minute TTL, 10 MB max) for repeated queries, enabled with `AGY_CACHE_ENABLED=true`.
 - **Conversation resume** — continue the latest `agy` conversation or resume a specific one via the `resume` option (`--continue` / `--conversation <id>`).
 - **Extra workspace directories** — add directories to the Antigravity workspace with `includeDirectories` (maps to repeated `--add-dir`).
@@ -183,7 +187,7 @@ These tools are designed to be used by the AI assistant.
 
 - **`ask-gemini`**: Ask Gemini through Antigravity CLI (`agy`) for plan review, implementation critique, code review, architecture feedback, debugging, and tradeoff analysis.
   - **`prompt`** (required): The analysis request. Use the `@` syntax to include file or directory references (e.g., `@src/main.js review this implementation`) or ask general questions.
-  - **`model`** (optional): The Antigravity model to use. Defaults to `Gemini 3.5 Flash (Medium)`. Verified Flash tiers include `Gemini 3.5 Flash (Low)`, `Gemini 3.5 Flash (Medium)`, and `Gemini 3.5 Flash (High)`.
+  - **`model`** (optional): The Antigravity model to use. Defaults to `Gemini 3.1 Pro (High)`. Verified options also include `Gemini 3.1 Pro (Low)` and the Flash tiers `Gemini 3.5 Flash (Low)`, `Gemini 3.5 Flash (Medium)`, and `Gemini 3.5 Flash (High)`.
   - **`sandbox`** (optional): Set to `true` to pass `--sandbox`.
   - **`changeMode`** (optional): Enable structured change mode for edit suggestions that Claude can apply directly.
   - **`yolo`** (optional): Pass `--dangerously-skip-permissions`. Use with caution.

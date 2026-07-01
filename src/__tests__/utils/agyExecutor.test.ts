@@ -54,7 +54,7 @@ describe('executeAgyCLI', () => {
   });
 
   describe('argument building', () => {
-    it('should use agy with the default Gemini 3.5 Flash model and print mode', async () => {
+    it('should use agy with the default Gemini model and print mode', async () => {
       await executeAgyCLI('test', {});
 
       expect(mockExecuteCommand).toHaveBeenCalledWith(

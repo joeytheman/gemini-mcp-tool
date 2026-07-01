@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## [2.0.1]
+- Added support for `Gemini 3.1 Pro (Low)` and `Gemini 3.1 Pro (High)`, now exposed by `agy models`.
+- Default model changed from `Gemini 3.5 Flash (Medium)` to `Gemini 3.1 Pro (High)`.
+
 ## [2.0.0]
 - Breaking: switched runtime execution to Antigravity CLI (`agy`) while keeping the MCP-facing `ask-gemini` workflow.
 - Default model is now `Gemini 3.5 Flash (Medium)`.

@@ -282,8 +282,8 @@ agy changelog
 
 | **Use Case** | **Recommended Model** | **Reason** |
 |--------------|----------------------|------------|
-| Complex analysis | `Gemini 3.5 Flash (High)` | Deeper review |
-| Architecture review | `Gemini 3.5 Flash (High)` | Better for large codebases |
+| Complex analysis | `Gemini 3.1 Pro (High)` | Deepest review (default) |
+| Architecture review | `Gemini 3.1 Pro (High)` | Best for large codebases |
 | Quick tasks | `Gemini 3.5 Flash (Low)` | Fastest responses |
 | Code review | `Gemini 3.5 Flash (Medium)` | Good speed/quality balance |
 
