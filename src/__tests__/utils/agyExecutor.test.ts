@@ -32,6 +32,15 @@ vi.mock('../../utils/chunkCache.js', () => ({
   getChunks: vi.fn().mockReturnValue(null),
 }));
 
+const mockRecover = vi.fn();
+vi.mock('../../utils/agyTranscriptRecovery.js', () => ({
+  isRecoverableEmptyOutput: (s: string) => {
+    const t = s.trim();
+    return t === '' || t === 'Error: timed out waiting for response';
+  },
+  recoverFromTranscript: (...args: any[]) => mockRecover(...args),
+}));
+
 import { executeAgyCLI, processChangeModeOutput } from '../../utils/agyExecutor.js';
 import { CLI, MODELS, ERROR_MESSAGES } from '../../constants.js';
 
@@ -193,6 +202,64 @@ describe('executeAgyCLI', () => {
       mockExecuteCommand.mockRejectedValueOnce(new Error('Failed to spawn command: ENOENT'));
 
       await expect(executeAgyCLI('test', {})).rejects.toThrow(ERROR_MESSAGES.AGY_NOT_FOUND);
+    });
+  });
+
+  describe('output recovery', () => {
+    it('recovers from the transcript when stdout is empty', async () => {
+      mockExecuteCommand.mockResolvedValue('');
+      mockRecover.mockReturnValue('RECOVERED ANSWER');
+
+      const result = await executeAgyCLI('test', {});
+
+      expect(result).toBe('RECOVERED ANSWER');
+      expect(mockRecover).toHaveBeenCalled();
+    });
+
+    it('recovers when stdout is the timeout sentinel', async () => {
+      mockExecuteCommand.mockResolvedValue('Error: timed out waiting for response');
+      mockRecover.mockReturnValue('RECOVERED ANSWER');
+
+      const result = await executeAgyCLI('test', {});
+
+      expect(result).toBe('RECOVERED ANSWER');
+    });
+
+    it('throws AGY_NO_OUTPUT for the timeout sentinel when recovery fails', async () => {
+      mockIsCacheEnabled.mockReturnValue(true);
+      mockExecuteCommand.mockResolvedValue('Error: timed out waiting for response');
+      mockRecover.mockReturnValue(null);
+
+      await expect(executeAgyCLI('test', {})).rejects.toThrow(ERROR_MESSAGES.AGY_NO_OUTPUT);
+      expect(mockCacheResponse).not.toHaveBeenCalled();
+    });
+
+    it('returns empty (soft) and does not cache for genuinely empty output without recovery', async () => {
+      mockIsCacheEnabled.mockReturnValue(true);
+      mockExecuteCommand.mockResolvedValue('');
+      mockRecover.mockReturnValue(null);
+
+      const result = await executeAgyCLI('test', {});
+
+      expect(result).toBe('');
+      expect(mockCacheResponse).not.toHaveBeenCalled();
+    });
+
+    it('does not attempt recovery for normal output', async () => {
+      mockExecuteCommand.mockResolvedValue('a real answer');
+
+      const result = await executeAgyCLI('test', {});
+
+      expect(result).toBe('a real answer');
+      expect(mockRecover).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('safety guards', () => {
+    it('refuses yolo with a filesystem-root workingDirectory', async () => {
+      await expect(executeAgyCLI('test', { yolo: true, cwd: '/' }))
+        .rejects.toThrow(ERROR_MESSAGES.UNSAFE_ROOT_YOLO);
+      expect(mockExecuteCommand).not.toHaveBeenCalled();
     });
   });
 

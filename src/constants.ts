@@ -9,6 +9,23 @@ export const ERROR_MESSAGES = {
   TOOL_NOT_FOUND: "not found in registry",
   NO_PROMPT_PROVIDED: "Please provide a prompt for analysis. Use @ syntax to include files (e.g., '@largefile.js explain what this does') or ask general questions",
   UNSUPPORTED_AGY_OPTIONS: "Unsupported Antigravity CLI option(s)",
+  INVALID_RESUME: "resume must be true, latest, continue, or a non-empty conversation ID.",
+  AGY_NO_OUTPUT: "Antigravity CLI (`agy`) returned no output (it may have timed out resolving a file reference) and no recoverable transcript was found. Ensure any @referenced files exist under the working directory or an includeDirectories entry, narrow the prompt, or increase printTimeout.",
+  UNSAFE_ROOT_YOLO: "Refusing to run agy with yolo (`--dangerously-skip-permissions`) when workingDirectory is a filesystem root. Set workingDirectory to a specific project directory.",
+} as const;
+
+// Antigravity CLI internal layout, used ONLY for best-effort output recovery.
+// FRAGILE: pinned to agy 1.0.13 internals — a patch release may rename any of these.
+// All access must degrade to null on mismatch; never throw based on these.
+export const AGY_INTERNAL = {
+  ROOT_SEGMENTS: [".gemini", "antigravity-cli"],
+  LAST_CONVERSATIONS_SEGMENTS: ["cache", "last_conversations.json"],
+  BRAIN_DIR: "brain",
+  TRANSCRIPT_SEGMENTS: [".system_generated", "logs", "transcript.jsonl"],
+  // A transcript record holding the final model answer.
+  TRANSCRIPT_FINAL: { type: "PLANNER_RESPONSE", source: "MODEL", status: "DONE" },
+  TIMEOUT_SENTINEL: "Error: timed out waiting for response",
+  DISABLE_RECOVERY_ENV: "AGY_DISABLE_TRANSCRIPT_RECOVERY",
 } as const;
 
 // Status messages
@@ -24,9 +41,6 @@ export const STATUS_MESSAGES = {
 // Models
 export const MODELS = {
   DEFAULT: "Gemini 3.5 Flash (Medium)",
-  FLASH_LOW: "Gemini 3.5 Flash (Low)",
-  FLASH_MEDIUM: "Gemini 3.5 Flash (Medium)",
-  FLASH_HIGH: "Gemini 3.5 Flash (High)",
 } as const;
 
 // MCP Protocol Constants
@@ -77,7 +91,6 @@ export const CLI = {
   },
   // Default values
   DEFAULTS: {
-    MODEL: MODELS.DEFAULT,
     BOOLEAN_TRUE: "true",
     BOOLEAN_FALSE: "false",
     APPROVAL_MODE_YOLO: "yolo",

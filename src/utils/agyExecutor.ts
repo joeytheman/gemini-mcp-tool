@@ -3,7 +3,8 @@ import { Logger } from './logger.js';
 import {
   ERROR_MESSAGES,
   MODELS,
-  CLI
+  CLI,
+  AGY_INTERNAL
 } from '../constants.js';
 
 import { parseChangeModeOutput, validateChangeModeEdits } from './changeModeParser.js';
@@ -11,6 +12,8 @@ import { formatChangeModeResponse, summarizeChangeModeEdits } from './changeMode
 import { chunkChangeModeEdits } from './changeModeChunker.js';
 import { cacheChunks, getChunks } from './chunkCache.js';
 import { generateCacheKey, getCachedResponse, cacheResponse, isCacheEnabled } from './responseCache.js';
+import { normalizeList, resolveFileReferences, isFilesystemRoot } from './fileReferences.js';
+import { recoverFromTranscript, isRecoverableEmptyOutput } from './agyTranscriptRecovery.js';
 
 export interface AgyCLIOptions {
   model?: string;
@@ -28,11 +31,8 @@ export interface AgyCLIOptions {
   cwd?: string;
 }
 
-function normalizeList(value?: string | string[]): string[] {
-  if (!value) return [];
-
-  const items = Array.isArray(value) ? value : value.split(',');
-  return items.map(item => item.trim()).filter(Boolean);
+function isYoloEnabled(opts: AgyCLIOptions): boolean {
+  return Boolean(opts.yolo) || opts.approvalMode === CLI.DEFAULTS.APPROVAL_MODE_YOLO;
 }
 
 function validateAgyOptions(opts: AgyCLIOptions): void {
@@ -52,20 +52,37 @@ function validateAgyOptions(opts: AgyCLIOptions): void {
       `The Antigravity CLI headless path supports model, sandbox, yolo, includeDirectories, printTimeout, resume, and workingDirectory.`
     );
   }
+
+  // Refuse yolo (skip-permissions) from a filesystem root, which would grant agy
+  // unrestricted access to the whole drive. Check the effective cwd: when
+  // workingDirectory is omitted, agy inherits the server's process.cwd().
+  if (isYoloEnabled(opts) && isFilesystemRoot(opts.cwd || process.cwd())) {
+    throw new Error(ERROR_MESSAGES.UNSAFE_ROOT_YOLO);
+  }
 }
 
-function shouldResumeLatest(resume: boolean | string): boolean {
-  if (resume === true) return true;
+function resolveResumeArgs(resume?: boolean | string): string[] {
+  if (resume === undefined || resume === false) return [];
 
-  const normalized = String(resume).trim().toLowerCase();
-  return normalized === 'true' ||
-    normalized === CLI.DEFAULTS.RESUME_LATEST ||
-    normalized === CLI.DEFAULTS.RESUME_CONTINUE;
+  const normalized = String(resume).trim();
+  const lower = normalized.toLowerCase();
+
+  if (lower === CLI.DEFAULTS.BOOLEAN_FALSE) return [];
+  if (normalized === '') {
+    throw new Error(ERROR_MESSAGES.INVALID_RESUME);
+  }
+
+  if (resume === true ||
+    lower === CLI.DEFAULTS.BOOLEAN_TRUE ||
+    lower === CLI.DEFAULTS.RESUME_LATEST ||
+    lower === CLI.DEFAULTS.RESUME_CONTINUE) {
+    return [CLI.FLAGS.CONTINUE];
+  }
+
+  return [CLI.FLAGS.CONVERSATION, normalized];
 }
 
-function buildAgyArgs(opts: AgyCLIOptions, prompt: string): string[] {
-  validateAgyOptions(opts);
-
+function buildAgyArgs(opts: AgyCLIOptions, prompt: string, refDirs: string[]): string[] {
   const args: string[] = [];
   const model = opts.model || MODELS.DEFAULT;
 
@@ -75,11 +92,13 @@ function buildAgyArgs(opts: AgyCLIOptions, prompt: string): string[] {
     args.push(CLI.FLAGS.SANDBOX);
   }
 
-  if (opts.yolo || opts.approvalMode === CLI.DEFAULTS.APPROVAL_MODE_YOLO) {
+  if (isYoloEnabled(opts)) {
     args.push(CLI.FLAGS.YOLO);
   }
 
-  for (const dir of normalizeList(opts.includeDirectories)) {
+  // Explicit includeDirectories plus the directories resolved from @file
+  // references, deduped.
+  for (const dir of new Set([...normalizeList(opts.includeDirectories), ...refDirs])) {
     args.push(CLI.FLAGS.ADD_DIR, dir);
   }
 
@@ -87,17 +106,7 @@ function buildAgyArgs(opts: AgyCLIOptions, prompt: string): string[] {
     args.push(CLI.FLAGS.PRINT_TIMEOUT, opts.printTimeout);
   }
 
-  if (opts.resume !== undefined && opts.resume !== false && String(opts.resume).trim().toLowerCase() !== 'false') {
-    if (String(opts.resume).trim() === '') {
-      throw new Error('resume must be true, latest, continue, or a non-empty conversation ID.');
-    }
-
-    if (shouldResumeLatest(opts.resume)) {
-      args.push(CLI.FLAGS.CONTINUE);
-    } else {
-      args.push(CLI.FLAGS.CONVERSATION, String(opts.resume).trim());
-    }
-  }
+  args.push(...resolveResumeArgs(opts.resume));
 
   args.push(CLI.FLAGS.PRINT, prompt);
 
@@ -115,8 +124,12 @@ export async function executeAgyCLI(
 
   validateAgyOptions(opts);
 
-  if (isCacheEnabled() && !opts.changeMode) {
-    const cacheKey = generateCacheKey(prompt, opts);
+  // Cache key (computed once) is only used when caching is enabled and this is
+  // not a changeMode request.
+  const cacheKey = (isCacheEnabled() && !opts.changeMode)
+    ? generateCacheKey(prompt, opts)
+    : undefined;
+  if (cacheKey) {
     const cached = getCachedResponse(cacheKey);
     if (cached) {
       Logger.debug('Returning cached response');
@@ -124,11 +137,17 @@ export async function executeAgyCLI(
     }
   }
 
-  let processedPrompt = prompt;
+  // Normalize file references and register the directories of any reference
+  // that resolves to a real file under a trusted root, so agy can read them (a
+  // bare @file outside an added dir makes agy hang). Unresolved references are
+  // passed through untouched.
+  const { prompt: resolvedPrompt, addDirs: refDirs } = resolveFileReferences(
+    prompt,
+    { cwd: opts.cwd, includeDirectories: opts.includeDirectories },
+  );
+  let processedPrompt = resolvedPrompt;
 
   if (opts.changeMode) {
-    processedPrompt = prompt.replace(/file:(\S+)/g, '@$1');
-
     const changeModeInstructions = `
 [CHANGEMODE INSTRUCTIONS]
 You are generating code modifications that will be processed by an automated system. The output format is critical because it enables programmatic application of changes without human intervention.
@@ -192,17 +211,37 @@ ${processedPrompt}
     processedPrompt = changeModeInstructions;
   }
 
-  const args = buildAgyArgs(opts, processedPrompt);
+  const args = buildAgyArgs(opts, processedPrompt, refDirs);
 
+  const runStartMs = Date.now();
   try {
     const result = await executeCommand(CLI.COMMANDS.AGY, args, onProgress, opts.cwd);
 
-    if (isCacheEnabled() && !opts.changeMode) {
-      const cacheKey = generateCacheKey(prompt, opts);
-      cacheResponse(cacheKey, result);
+    // agy can exit 0 with empty/timeout stdout while the real answer is only in
+    // its transcript. Recover BEFORE caching or changeMode parsing.
+    let finalResult = result;
+    if (isRecoverableEmptyOutput(result)) {
+      Logger.debug('agy returned empty/timeout output; attempting transcript recovery');
+      const recovered = recoverFromTranscript({ cwd: opts.cwd, runStartMs });
+      if (recovered) {
+        finalResult = recovered;
+      } else if (result.trim() === AGY_INTERNAL.TIMEOUT_SENTINEL) {
+        // The timeout sentinel is never a real answer; fail loud.
+        throw new Error(ERROR_MESSAGES.AGY_NO_OUTPUT);
+      } else {
+        // Genuinely empty output (e.g. a changeMode request the model decided
+        // needs no edits). Preserve the legacy soft result rather than erroring.
+        finalResult = '';
+      }
     }
 
-    return result;
+    // Never cache an empty result — it is not a useful answer and an empty
+    // string would crash the size-bounded LRU (size 0).
+    if (cacheKey && finalResult) {
+      cacheResponse(cacheKey, finalResult);
+    }
+
+    return finalResult;
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     if (errorMessage.includes('ENOENT') || errorMessage.includes('command not found')) {
