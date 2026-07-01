@@ -15,6 +15,15 @@ const CACHE_DIR = path.join(os.tmpdir(), 'agy-mcp-chunks');
 const CACHE_TTL = 10 * 60 * 1000;
 const MAX_CACHE_FILES = 50;
 
+// Cache keys are the first 8 hex chars of a SHA256 digest (see cacheChunks).
+// Validate any user/model-supplied key against this before it ever touches the
+// filesystem — an unvalidated key would let a traversal path escape CACHE_DIR
+// and (on parse error / expiry) get fs.unlinkSync'd.
+const CACHE_KEY_PATTERN = /^[0-9a-f]{8}$/;
+function isValidCacheKey(cacheKey: string): boolean {
+  return typeof cacheKey === 'string' && CACHE_KEY_PATTERN.test(cacheKey);
+}
+
 function ensureCacheDir(): void {
   if (!fs.existsSync(CACHE_DIR)) {
     fs.mkdirSync(CACHE_DIR, { recursive: true });
@@ -59,29 +68,37 @@ export function cacheChunks(prompt: string, chunks: EditChunk[]): string {
  * @returns The cached chunks or null if expired/not found
  */
 export function getChunks(cacheKey: string): EditChunk[] | null {
+  // Reject malformed keys before constructing any path. A non-hex/wrong-length
+  // key (e.g. a traversal sequence) returns a cache miss, which surfaces as the
+  // friendly "cache miss" text in fetch-chunk rather than an MCP error.
+  if (!isValidCacheKey(cacheKey)) {
+    Logger.debug(`Rejected invalid cache key: ${cacheKey}`);
+    return null;
+  }
+
   const filePath = path.join(CACHE_DIR, `${cacheKey}.json`);
-  
+
   try {
     if (!fs.existsSync(filePath)) {
       return null;
     }
-    
+
     const fileContent = fs.readFileSync(filePath, 'utf-8');
     const data: CacheEntry = JSON.parse(fileContent);
-    
+
     if (Date.now() - data.timestamp > CACHE_TTL) {
       fs.unlinkSync(filePath);
       Logger.debug(`Cache expired for ${cacheKey}, deleted file`);
       return null;
     }
-    
+
     Logger.debug(`Cache hit for ${cacheKey}, returning ${data.chunks.length} chunks`);
     return data.chunks;
   } catch (error) {
+    // Treat any read/parse failure as a cache miss. Do NOT delete the file: a
+    // transient parse error (e.g. a concurrent writer mid-write) must not nuke a
+    // file that may still be valid. Stale files are reaped by mtime elsewhere.
     Logger.debug(`Cache read error for ${cacheKey}: ${error}`);
-    try {
-      fs.unlinkSync(filePath); // Clean up bad file
-    } catch {}
     return null;
   }
 }
