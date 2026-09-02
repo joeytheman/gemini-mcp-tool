@@ -50,9 +50,10 @@ Include configuration with implementation:
 ## Token Management
 
 ### Gemini Model Selection
-- **Quick tasks**: Use `Gemini 3.5 Flash (Low)`
-- **Balanced review/critique**: Use `Gemini 3.5 Flash (Medium)`
-- **Deepest analysis (default)**: Use `Gemini 3.1 Pro (High)` (or `Gemini 3.1 Pro (Low)` for less latency)
+- **Coding and complex analysis (default)**: Use `Gemini 3.8 Flash (High)`
+- **Balanced general work**: Use `Gemini 3.8 Flash (Medium)`
+- **Quick tasks**: Use `Gemini 3.8 Flash (Low)`
+- **Explicit alternative**: Use `Gemini 3.1 Pro (Low)` or `Gemini 3.1 Pro (High)` when preferred or when 3.8 is unavailable
 
 ### Efficient File Inclusion
 ```bash
@@ -167,8 +168,8 @@ Always include full error messages and stack traces when debugging.
 ✅ `@error.log @config.js "why doesn't database connection work?"`
 
 ### 3. Ignoring Model Limits
-❌ Trying to analyze 5M tokens with Flash model
-✅ Using Pro for large codebases, Flash for single files
+❌ Sending an entire repository when a focused set of files would answer the question
+✅ Selecting only the relevant files and describing the desired analysis
 
 ### 4. Vague Success Criteria
 ❌ "make it better"

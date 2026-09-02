@@ -48,10 +48,12 @@ It's how you reference files for analysis:
 Yes! Gemini's large context window allows analyzing entire codebases.
 
 ### Which model should I use?
-- **Default / deepest review**: Gemini 3.1 Pro (High) *(default)*
-- **Daily work**: Gemini 3.5 Flash (Medium)
-- **Large analysis**: Gemini 3.1 Pro (Low or High)
-- **Quick tasks**: Gemini 3.5 Flash (Low)
+- **Coding and complex analysis**: Gemini 3.8 Flash (High) *(default)*
+- **Daily work**: Gemini 3.8 Flash (Medium)
+- **Quick tasks**: Gemini 3.8 Flash (Low)
+- **Explicit alternatives**: `Gemini 3.1 Pro (Low)` or `Gemini 3.1 Pro (High)`
+
+Run `agy models` to confirm availability. If the Gemini 3.8 tiers are missing, update Antigravity CLI and explicitly select a model that is listed; the MCP server does not automatically fall back.
 
 ## Features
 
@@ -65,7 +67,7 @@ No, it requires internet access through Antigravity CLI.
 
 ### Why is it slow?
 - Large files take time to process
-- Try `Gemini 3.5 Flash (Low)` for speed
+- Try `Gemini 3.8 Flash (Low)` for speed
 - Check your internet connection
 
 ### Can I use my own models?

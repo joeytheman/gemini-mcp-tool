@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { toolRegistry, getToolDefinitions, toolExists, getPromptDefinitions } from '../tools/index.js';
-import { CLI } from '../constants.js';
+import { CLI, MODELS } from '../constants.js';
 
 describe('Tool Registry', () => {
   describe('getToolDefinitions', () => {
@@ -135,6 +135,21 @@ describe('Tool Registry', () => {
       const brainstormTool = tools.find(t => t.name === 'brainstorm');
 
       expect(brainstormTool?.inputSchema.properties).toHaveProperty('methodology');
+    });
+
+    it('Gemini tools should advertise the current default and verified alternatives', () => {
+      const tools = getToolDefinitions();
+
+      for (const toolName of ['ask-gemini', 'brainstorm']) {
+        const tool = tools.find(t => t.name === toolName);
+        const modelSchema = tool?.inputSchema.properties?.model as { description?: string } | undefined;
+
+        expect(modelSchema?.description).toContain(MODELS.DEFAULT);
+        expect(modelSchema?.description).toContain('Gemini 3.8 Flash (Low)');
+        expect(modelSchema?.description).toContain('Gemini 3.8 Flash (Medium)');
+        expect(modelSchema?.description).toContain('Gemini 3.1 Pro (Low)');
+        expect(modelSchema?.description).toContain('Gemini 3.1 Pro (High)');
+      }
     });
 
     it('fetch-chunk should have required cacheKey and chunkIndex', () => {

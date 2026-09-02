@@ -40,7 +40,7 @@ export const STATUS_MESSAGES = {
 
 // Models
 export const MODELS = {
-  DEFAULT: "Gemini 3.1 Pro (High)",
+  DEFAULT: "Gemini 3.8 Flash (High)",
 } as const;
 
 // MCP Protocol Constants

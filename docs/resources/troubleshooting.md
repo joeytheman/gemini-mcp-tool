@@ -96,7 +96,7 @@ claude mcp add gemini-feedback -- npx @joeytheman/gemini-mcp-tool
 
 2. **Check your internet connection**
    - Try accessing google.com in your browser
-   - Test with a simple request: `agy --model "Gemini 3.5 Flash (Medium)" --print "test"`
+   - Test with a simple request: `agy --model "Gemini 3.8 Flash (Medium)" --print "test"`
 
 3. **Verify firewall settings**
    - Ensure your firewall isn't blocking requests to Google APIs
@@ -110,7 +110,10 @@ claude mcp add gemini-feedback -- npx @joeytheman/gemini-mcp-tool
 5. **If still failing, re-run Antigravity setup**
    ```bash
    agy install
+   agy models
    ```
+
+   `Gemini 3.8 Flash (High)` must appear in `agy models` for default requests. If it is missing, update Antigravity CLI and explicitly pass an available model such as `model:"Gemini 3.1 Pro (High)"`. The MCP server does not automatically fall back.
 
 </TroubleshootingModal>
 
@@ -125,7 +128,7 @@ claude mcp add gemini-feedback -- npx @joeytheman/gemini-mcp-tool
 
 2. **Use a faster Gemini Flash tier**:
    ```bash
-   /ask-gemini prompt:"quick review this change" model:"Gemini 3.5 Flash (Low)"
+   /ask-gemini prompt:"quick review this change" model:"Gemini 3.8 Flash (Low)"
    ```
 
 3. **Break up large requests into smaller chunks**:
@@ -163,7 +166,7 @@ claude mcp add gemini-feedback -- npx @joeytheman/gemini-mcp-tool
 node --version
 
 # 2. Test Antigravity CLI directly
-agy --model "Gemini 3.5 Flash (Medium)" --print "Hello"
+agy --model "Gemini 3.8 Flash (Medium)" --print "Hello"
 
 # 3. Reinstall if needed
 npm uninstall -g @joeytheman/gemini-mcp-tool
@@ -195,7 +198,7 @@ claude mcp list
 # "🧠 Gemini is analyzing your request..."
 
 # Use faster Flash model for large requests
-/ask-gemini prompt:@large-file.js summarize model:"Gemini 3.5 Flash (Low)"
+/ask-gemini prompt:@large-file.js summarize model:"Gemini 3.8 Flash (Low)"
 
 # Break up large analysis into smaller chunks
 /ask-gemini prompt:@specific-function.js explain this function
@@ -214,7 +217,7 @@ claude mcp list
 **Solutions**:
 ```bash
 # Use Flash Low for faster, shorter responses
-/ask-gemini prompt:"your prompt" model:"Gemini 3.5 Flash (Low)"
+/ask-gemini prompt:"your prompt" model:"Gemini 3.8 Flash (Low)"
 
 # Break large requests into smaller, focused chunks
 /ask-gemini prompt:@file1.js explain the main function
@@ -259,7 +262,7 @@ agy models
 **For very large codebases** (10,000+ files):
 - Consider breaking analysis into smaller chunks
 - Use more specific file patterns with `@` syntax
-- Use `Gemini 3.5 Flash (Low)` for faster processing
+- Use `Gemini 3.8 Flash (Low)` for faster processing
 ```
 
 ## Debugging
@@ -282,10 +285,11 @@ agy changelog
 
 | **Use Case** | **Recommended Model** | **Reason** |
 |--------------|----------------------|------------|
-| Complex analysis | `Gemini 3.1 Pro (High)` | Deepest review (default) |
-| Architecture review | `Gemini 3.1 Pro (High)` | Best for large codebases |
-| Quick tasks | `Gemini 3.5 Flash (Low)` | Fastest responses |
-| Code review | `Gemini 3.5 Flash (Medium)` | Good speed/quality balance |
+| Complex analysis | `Gemini 3.8 Flash (High)` | Default with the High reasoning budget |
+| Architecture review | `Gemini 3.8 Flash (High)` | Recommended for complex coding tasks |
+| Quick tasks | `Gemini 3.8 Flash (Low)` | Lowest reasoning budget |
+| General work | `Gemini 3.8 Flash (Medium)` | Balanced reasoning and latency |
+| Explicit alternative | `Gemini 3.1 Pro (Low)` / `Gemini 3.1 Pro (High)` | Use when preferred or 3.8 is unavailable |
 
 ## Quick Fixes
 
@@ -303,13 +307,13 @@ agy models
 ### Test Basic Functionality
 ```bash
 # Test Antigravity CLI
-agy --model "Gemini 3.5 Flash (Medium)" --print "Hello"
+agy --model "Gemini 3.8 Flash (Medium)" --print "Hello"
 
 # Test MCP Tool
 /ping
 
 # Test file analysis with working model
-/ask-gemini prompt:@README.md summarize model:"Gemini 3.5 Flash (Medium)"
+/ask-gemini prompt:@README.md summarize model:"Gemini 3.8 Flash (Medium)"
 ```
 
 ## Platform-Specific Issues

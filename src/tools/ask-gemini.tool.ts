@@ -8,7 +8,7 @@ import {
 
 export const askGeminiArgsSchema = z.object({
   prompt: z.string().min(1).describe("Analysis request for Gemini feedback. Use @ syntax to include files (e.g., '@largefile.js review this implementation') or ask for plan/code review feedback"),
-  model: z.string().optional().describe("Optional Antigravity model name. Defaults to 'Gemini 3.1 Pro (High)'. Other verified options include 'Gemini 3.1 Pro (Low)', 'Gemini 3.5 Flash (Low)', 'Gemini 3.5 Flash (Medium)', and 'Gemini 3.5 Flash (High)'."),
+  model: z.string().optional().describe("Optional Antigravity model name. Defaults to 'Gemini 3.8 Flash (High)'. Other verified options include 'Gemini 3.8 Flash (Low)', 'Gemini 3.8 Flash (Medium)', 'Gemini 3.1 Pro (Low)', and 'Gemini 3.1 Pro (High)'."),
   sandbox: z.boolean().default(false).describe("Use Antigravity sandbox mode (--sandbox) to restrict terminal access"),
   changeMode: z.boolean().default(false).describe("Enable structured change mode - formats prompts to prevent tool errors and returns structured edit suggestions that Claude can apply directly"),
   chunkIndex: z.union([z.number(), z.string()]).optional().describe("Which chunk to return (1-based)"),

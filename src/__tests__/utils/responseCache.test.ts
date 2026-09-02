@@ -25,8 +25,8 @@ describe('responseCache', () => {
 
   describe('generateCacheKey', () => {
     it('should produce a deterministic SHA256 hash', () => {
-      const key1 = generateCacheKey('test prompt', { model: 'Gemini 3.5 Flash (Medium)' });
-      const key2 = generateCacheKey('test prompt', { model: 'Gemini 3.5 Flash (Medium)' });
+      const key1 = generateCacheKey('test prompt', { model: 'Gemini 3.8 Flash (Medium)' });
+      const key2 = generateCacheKey('test prompt', { model: 'Gemini 3.8 Flash (Medium)' });
       expect(key1).toBe(key2);
       // SHA256 produces 64 hex chars
       expect(key1).toMatch(/^[0-9a-f]{64}$/);

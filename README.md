@@ -28,9 +28,9 @@ This is a simple Model Context Protocol (MCP) server that lets AI assistants ask
 
 **Goal**: Use Gemini's analysis capabilities directly from Codex or Claude Code for reviews, critiques, and large-file questions.
 
-## What's New in 2.0.1
+## What's New in 2.0.2
 
-- **Gemini 3.1 Pro support** — `agy models` now exposes `Gemini 3.1 Pro (Low)` and `Gemini 3.1 Pro (High)`. The default model is now **Gemini 3.1 Pro (High)** (previously Gemini 3.5 Flash (Medium)). Pass `model: "Gemini 3.5 Flash (Low)"`, `"Gemini 3.5 Flash (Medium)"`, or `"Gemini 3.5 Flash (High)"` if you want the faster, cheaper Flash tiers instead.
+- **Gemini 3.8 Flash support** — the default model is now **Gemini 3.8 Flash (High)** for strong coding and complex-analysis performance. Pass `model: "Gemini 3.8 Flash (Low)"` or `model: "Gemini 3.8 Flash (Medium)"` when latency matters more than the High reasoning budget. Gemini 3.1 Pro (Low/High) remains available as an explicit alternative when exposed by `agy models`.
 
 ## What's New in 2.0
 
@@ -60,6 +60,8 @@ agy --version
 agy install
 agy models
 ```
+
+The default requires `Gemini 3.8 Flash (High)` to appear in `agy models`. If it is missing, update Antigravity CLI and rerun setup. Until 3.8 is available, pass an exact model shown by `agy models`, such as `model: "Gemini 3.1 Pro (High)"`.
 
 
 ### One-Line Setup
@@ -187,7 +189,7 @@ These tools are designed to be used by the AI assistant.
 
 - **`ask-gemini`**: Ask Gemini through Antigravity CLI (`agy`) for plan review, implementation critique, code review, architecture feedback, debugging, and tradeoff analysis.
   - **`prompt`** (required): The analysis request. Use the `@` syntax to include file or directory references (e.g., `@src/main.js review this implementation`) or ask general questions.
-  - **`model`** (optional): The Antigravity model to use. Defaults to `Gemini 3.1 Pro (High)`. Verified options also include `Gemini 3.1 Pro (Low)` and the Flash tiers `Gemini 3.5 Flash (Low)`, `Gemini 3.5 Flash (Medium)`, and `Gemini 3.5 Flash (High)`.
+  - **`model`** (optional): The Antigravity model to use. Defaults to `Gemini 3.8 Flash (High)`. Verified options also include `Gemini 3.8 Flash (Low)`, `Gemini 3.8 Flash (Medium)`, `Gemini 3.1 Pro (Low)`, and `Gemini 3.1 Pro (High)`.
   - **`sandbox`** (optional): Set to `true` to pass `--sandbox`.
   - **`changeMode`** (optional): Enable structured change mode for edit suggestions that Claude can apply directly.
   - **`yolo`** (optional): Pass `--dangerously-skip-permissions`. Use with caution.
@@ -199,7 +201,7 @@ These tools are designed to be used by the AI assistant.
 
 - **`brainstorm`**: Generate creative ideas with structured methodologies and domain context.
   - **`prompt`** (required): Brainstorming challenge or question to explore.
-  - **`model`** (optional): The Antigravity model to use.
+  - **`model`** (optional): The Antigravity model to use. Defaults to `Gemini 3.8 Flash (High)`.
   - **`methodology`** (optional): Framework to use: `divergent`, `convergent`, `scamper`, `design-thinking`, `lateral`, or `auto` (default).
   - **`domain`** (optional): Domain context (e.g., 'software', 'business', 'creative', 'research').
   - **`constraints`** (optional): Known limitations or requirements.

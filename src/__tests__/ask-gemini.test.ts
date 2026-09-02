@@ -13,7 +13,7 @@ describe('ask-gemini Tool', () => {
     it('should accept supported agy optional flags', () => {
       const result = askGeminiArgsSchema.parse({
         prompt: 'test prompt',
-        model: 'Gemini 3.5 Flash (Medium)',
+        model: 'Gemini 3.8 Flash (Medium)',
         sandbox: true,
         changeMode: true,
         yolo: true,
@@ -23,7 +23,7 @@ describe('ask-gemini Tool', () => {
         workingDirectory: '/tmp/project',
       });
 
-      expect(result.model).toBe('Gemini 3.5 Flash (Medium)');
+      expect(result.model).toBe('Gemini 3.8 Flash (Medium)');
       expect(result.sandbox).toBe(true);
       expect(result.changeMode).toBe(true);
       expect(result.yolo).toBe(true);
