@@ -34,7 +34,7 @@ features:
     details: Gemini MCP Tool uses your Antigravity CLI setup.
   - icon: 🚦
     title: Model Selection
-    details: Choose Gemini 3.5 Flash Low, Medium, or High.
+    details: Use Gemini 3.8 Flash High by default, or choose Low, Medium, or a Pro tier.
 ---
 
 <div class="explore-hint" style="text-align: center; margin: 32px 0 48px; position: relative;">

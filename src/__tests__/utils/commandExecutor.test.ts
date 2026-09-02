@@ -157,12 +157,12 @@ describe('executeCommand', () => {
     const mockProc = createMockChildProcess();
     mockSpawn.mockReturnValue(mockProc);
 
-    const promise = executeCommand('agy', ['--model', 'Gemini 3.5 Flash (Medium)', '--print', 'test']);
+    const promise = executeCommand('agy', ['--model', 'Gemini 3.8 Flash (Medium)', '--print', 'test']);
 
     mockProc.emit('close', 0);
     await promise;
 
-    expect(mockSpawn).toHaveBeenCalledWith('agy', ['--model', 'Gemini 3.5 Flash (Medium)', '--print', 'test'], {
+    expect(mockSpawn).toHaveBeenCalledWith('agy', ['--model', 'Gemini 3.8 Flash (Medium)', '--print', 'test'], {
       env: process.env,
       shell: false,
       stdio: ['ignore', 'pipe', 'pipe'],

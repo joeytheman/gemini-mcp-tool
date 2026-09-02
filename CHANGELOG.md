@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+## [2.0.2]
+- Added support for the `Gemini 3.8 Flash` Low, Medium, and High tiers exposed by `agy models`.
+- Default model changed from `Gemini 3.1 Pro (High)` to `Gemini 3.8 Flash (High)`.
+- Synchronized the MCP server version with the package version.
+
 ## [2.0.1]
 - Added support for `Gemini 3.1 Pro (Low)` and `Gemini 3.1 Pro (High)`, now exposed by `agy models`.
 - Default model changed from `Gemini 3.5 Flash (Medium)` to `Gemini 3.1 Pro (High)`.

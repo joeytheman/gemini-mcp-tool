@@ -57,6 +57,7 @@ describe('executeAgyCLI', () => {
     it('should use agy with the default Gemini model and print mode', async () => {
       await executeAgyCLI('test', {});
 
+      expect(MODELS.DEFAULT).toBe('Gemini 3.8 Flash (High)');
       expect(mockExecuteCommand).toHaveBeenCalledWith(
         CLI.COMMANDS.AGY,
         [CLI.FLAGS.MODEL, MODELS.DEFAULT, CLI.FLAGS.PRINT, 'test'],
@@ -66,11 +67,11 @@ describe('executeAgyCLI', () => {
     });
 
     it('should add model flag when specified', async () => {
-      await executeAgyCLI('test', { model: 'Gemini 3.5 Flash (High)' });
+      await executeAgyCLI('test', { model: 'Gemini 3.8 Flash (Medium)' });
 
       const args = mockExecuteCommand.mock.calls[0][1];
       expect(args).toContain(CLI.FLAGS.MODEL);
-      expect(args).toContain('Gemini 3.5 Flash (High)');
+      expect(args).toContain('Gemini 3.8 Flash (Medium)');
     });
 
     it('should add sandbox flag when specified', async () => {
@@ -167,11 +168,11 @@ describe('executeAgyCLI', () => {
     });
 
     it('should handle string options for model compatibility', async () => {
-      await executeAgyCLI('test', 'Gemini 3.5 Flash (Low)');
+      await executeAgyCLI('test', 'Gemini 3.8 Flash (Low)');
 
       const args = mockExecuteCommand.mock.calls[0][1];
       expect(args).toContain(CLI.FLAGS.MODEL);
-      expect(args).toContain('Gemini 3.5 Flash (Low)');
+      expect(args).toContain('Gemini 3.8 Flash (Low)');
     });
   });
 
@@ -192,7 +193,7 @@ describe('executeAgyCLI', () => {
     it('should not retry when the agy backend reports resource exhaustion', async () => {
       mockExecuteCommand.mockRejectedValueOnce(new Error('RESOURCE_EXHAUSTED'));
 
-      await expect(executeAgyCLI('test', { model: 'Gemini 3.5 Flash (Medium)' }))
+      await expect(executeAgyCLI('test', { model: 'Gemini 3.8 Flash (Medium)' }))
         .rejects.toThrow('RESOURCE_EXHAUSTED');
 
       expect(mockExecuteCommand).toHaveBeenCalledTimes(1);

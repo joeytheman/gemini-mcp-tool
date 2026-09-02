@@ -1,4 +1,9 @@
 import { describe, it, expect, vi, beforeAll } from 'vitest';
+import { readFileSync } from 'node:fs';
+
+const packageVersion = JSON.parse(
+  readFileSync(new URL('../../package.json', import.meta.url), 'utf8')
+).version as string;
 
 // Track constructor calls manually using plain arrays.
 // vitest's mockReset clears mock.calls between tests, but these arrays persist.
@@ -53,7 +58,8 @@ describe('Gemini MCP Server', () => {
 
       const [serverConfig] = serverConstructorCalls[0];
       expect(serverConfig).toHaveProperty('name', 'gemini-mcp');
-      expect(serverConfig).toHaveProperty('version');
+      expect(packageVersion).toBe('2.0.2');
+      expect(serverConfig).toHaveProperty('version', packageVersion);
     });
 
     it('should register capabilities', () => {
