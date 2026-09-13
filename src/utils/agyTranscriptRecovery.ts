@@ -21,6 +21,10 @@ import { AGY_INTERNAL } from '../constants.js';
 // timestamp and our millisecond run-start clock.
 const FRESHNESS_TOLERANCE_MS = 2000;
 
+// agy conversation IDs are UUID-shaped. Dots are excluded outright: `.` and
+// `..` are valid path components and would traverse out of the brain directory.
+const CONVERSATION_ID = /^[A-Za-z0-9_-]+$/;
+
 interface TranscriptRecord {
   type?: string;
   source?: string;
@@ -112,20 +116,33 @@ function readLastResponse(transcriptPath: string, runStartMs: number): string | 
 }
 
 /**
- * Recover the latest model response for `cwd` if it was produced after
+ * Recover the latest model response for `conversationId` (or, absent one, for
+ * `cwd`) if it was produced after
  * `runStartMs`. Returns the recovered text, or `null` if recovery is disabled,
  * the cwd has no known conversation, the transcript is stale/missing, or any
  * access fails. There is intentionally NO global "newest transcript" fallback —
  * that could return another project's or session's answer.
  */
-export function recoverFromTranscript(opts: { cwd?: string; runStartMs: number }): string | null {
+export function recoverFromTranscript(
+  opts: { cwd?: string; conversationId?: string; runStartMs: number }
+): string | null {
   if (recoveryDisabled()) return null;
 
   const cwd = opts.cwd || process.cwd();
   try {
-    const id = lookupConversationId(cwd);
+    // An explicitly resumed conversation is authoritative; the cwd map only
+    // knows the LAST conversation for a directory. The ID reaches us from tool
+    // arguments and is joined into a path, so only agy's own id shape is
+    // accepted — never a traversal out of the brain directory.
+    const id = opts.conversationId?.trim() || lookupConversationId(cwd);
     if (!id) {
       Logger.debug(`[recovery] no conversation mapped for cwd ${cwd}`);
+      return null;
+    }
+    // Whatever the source, the id becomes a path component: validate it before
+    // any join. The cwd map is on disk and is no more trusted than an argument.
+    if (!CONVERSATION_ID.test(id)) {
+      Logger.debug(`[recovery] refusing malformed conversation id ${id}`);
       return null;
     }
     const transcriptPath = path.join(agyRoot(), AGY_INTERNAL.BRAIN_DIR, id, ...AGY_INTERNAL.TRANSCRIPT_SEGMENTS);

@@ -1,5 +1,24 @@
 import { vi } from 'vitest';
 import { EventEmitter } from 'node:events';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+
+const tempDirs: string[] = [];
+
+/** A real temp directory, realpath'd so macOS /var -> /private/var containment checks hold. */
+export function makeTempDir(prefix: string): string {
+  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), `${prefix}-`)));
+  tempDirs.push(dir);
+  return dir;
+}
+
+/** Remove every directory makeTempDir handed out; call from afterEach. */
+export function cleanupTempDirs(): void {
+  while (tempDirs.length > 0) {
+    fs.rmSync(tempDirs.pop() as string, { recursive: true, force: true });
+  }
+}
 
 /**
  * Creates a mock child process for testing command execution

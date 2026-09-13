@@ -46,7 +46,9 @@ export function toolExists(toolName: string): boolean {
 }
 export function getToolDefinitions(): Tool[] { // get Tool definitions from registry
   return toolRegistry.map(tool => {
-    const jsonSchema = z.toJSONSchema(tool.zodSchema) as Record<string, any>;
+    // io: 'input' so a field with a default is advertised as optional, not
+    // required — the default is applied here, not by the client.
+    const jsonSchema = z.toJSONSchema(tool.zodSchema, { io: 'input' }) as Record<string, any>;
     const inputSchema: Tool['inputSchema'] = {
       type: "object",
       properties: jsonSchema.properties || {},
@@ -63,7 +65,7 @@ export function getToolDefinitions(): Tool[] { // get Tool definitions from regi
 }
 
 function extractPromptArguments(zodSchema: ZodType): Array<{name: string; description: string; required: boolean}> {
-  const jsonSchema = z.toJSONSchema(zodSchema) as Record<string, any>;
+  const jsonSchema = z.toJSONSchema(zodSchema, { io: 'input' }) as Record<string, any>;
   const properties = jsonSchema.properties || {};
   const required = jsonSchema.required || [];
   
@@ -84,13 +86,17 @@ export function getPromptDefinitions(): Prompt[] { // Helper to get MCP Prompt d
     }));
 }
 
+/** Zod issues as `path: message` lines, for error text and schema-mismatch reports. */
+export function formatZodIssues(error: ZodError): string[] {
+  return error.issues.map(issue => `${issue.path.join('.')}: ${issue.message}`);
+}
+
 export async function executeTool(toolName: string, args: ToolArguments, onProgress?: (newOutput: string) => void): Promise<string> {
   const tool = toolRegistry.find(t => t.name === toolName);
   if (!tool) { throw new Error(`Unknown tool: ${toolName}`); } try { const validatedArgs = tool.zodSchema.parse(args) as ToolArguments;
     return tool.execute(validatedArgs, onProgress);
   } catch (error) { if (error instanceof ZodError) {
-      const issues = error.issues.map(issue => `${issue.path.join('.')}: ${issue.message}`).join(', ');
-      throw new Error(`Invalid arguments for ${toolName}: ${issues}`);
+      throw new Error(`Invalid arguments for ${toolName}: ${formatZodIssues(error).join(', ')}`);
     }
     throw error;
   }

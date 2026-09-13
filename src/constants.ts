@@ -12,6 +12,23 @@ export const ERROR_MESSAGES = {
   INVALID_RESUME: "resume must be true, latest, continue, or a non-empty conversation ID.",
   AGY_NO_OUTPUT: "Antigravity CLI (`agy`) returned no output (it may have timed out resolving a file reference) and no recoverable transcript was found. Ensure any @referenced files exist under the working directory or an includeDirectories entry, narrow the prompt, or increase printTimeout.",
   UNSAFE_ROOT_YOLO: "Refusing to run agy with yolo (`--dangerously-skip-permissions`) when workingDirectory is a filesystem root. Set workingDirectory to a specific project directory.",
+  UNSUPPORTED_OUTPUT_FORMAT: "outputFormat must be 'text' or 'json'. Antigravity CLI has no stream-json mode.",
+  JSON_SCHEMA_REQUIRES_JSON: "jsonSchema requires outputFormat: 'json'.",
+  INVALID_EFFORT: "effort must be one of: low, medium, high.",
+  AGY_JSON_PARSE: "Could not parse the Antigravity CLI JSON envelope",
+  AGY_STATUS_ERROR: "Antigravity CLI returned status ERROR",
+  AGY_DENIED_ACTIONS: "Antigravity CLI produced no response because it denied required actions. Retry with `yolo: true`, or allow the actions in the Antigravity `permissions.allow` settings. Denied",
+  INVALID_CONVERSATION_ID: "conversationId must be a non-empty agy conversation ID.",
+  CONVERSATION_NOT_RESUMED: "agy did not resume conversation",
+  INVALID_WORKING_DIRECTORY: "workingDirectory must be an absolute path to an existing directory that is not a filesystem root",
+  LIVE_PASS_ARTIFACT_DIR: "artifactDir must be an absolute path strictly inside workingDirectory",
+  LIVE_PASS_NO_BRIEF: "brief is required: describe the base URL or app id, the served-branch marker, the seed case, and any navigation hints.",
+  // agy resolves an @reference up to the first space, so a path containing
+  // whitespace becomes a dangling reference that hangs until --print-timeout.
+  UNREFERENCEABLE_PATH: "path contains whitespace, which Antigravity CLI cannot resolve as an @reference. Move or rename it so the path has no spaces",
+  SCREEN_REVIEW_NO_IMAGES: "review mode requires at least one absolute image path",
+  SCREEN_REVIEW_IMAGE_MISSING: "image does not exist",
+  SCREEN_REVIEW_ROUTE_FILE: "plan mode requires routeFile: an absolute path to an existing file inside workingDirectory",
 } as const;
 
 // Antigravity CLI internal layout, used ONLY for best-effort output recovery.
@@ -38,9 +55,27 @@ export const STATUS_MESSAGES = {
   PROCESSING_COMPLETE: "✅ Analysis completed successfully",
 } as const;
 
-// Models
+// Models. The tier in an Antigravity model name IS its reasoning effort, which
+// is why `--effort` is rejected for these names.
 export const MODELS = {
   DEFAULT: "Gemini 3.8 Flash (High)",
+  MEDIUM: "Gemini 3.8 Flash (Medium)",
+} as const;
+
+export const MODEL_CHOICE_DESCRIPTION =
+  "Optional Antigravity model name. Verified options: 'Gemini 3.8 Flash (Low)', 'Gemini 3.8 Flash (Medium)', 'Gemini 3.8 Flash (High)', 'Gemini 3.1 Pro (Low)', and 'Gemini 3.1 Pro (High)'. The tier in the name is the reasoning effort.";
+
+// Live UI pass / screen review
+export const LIVE_PASS = {
+  DEFAULT_ARTIFACT_SEGMENT: ".live-pass",
+  MANIFEST_FILE: "manifest.json",
+  DEFAULT_PRINT_TIMEOUT: "15m",
+  SCREEN_REVIEW_PRINT_TIMEOUT: "10m",
+  PLAYWRIGHT_MCP_NAME: "playwright",
+  MAESTRO_MCP_NAME: "maestro",
+  // Slack between a frame's mtime and our run-start clock.
+  FRESHNESS_TOLERANCE_MS: 2000,
+  CONVERSATION_LINE_PREFIX: "[GEMINI_CONVERSATION_ID=",
 } as const;
 
 // MCP Protocol Constants
@@ -88,6 +123,9 @@ export const CLI = {
     PRINT_TIMEOUT: "--print-timeout",
     CONTINUE: "--continue",
     CONVERSATION: "--conversation",
+    OUTPUT_FORMAT: "--output-format",
+    JSON_SCHEMA: "--json-schema",
+    EFFORT: "--effort",
   },
   // Default values
   DEFAULTS: {
@@ -96,6 +134,9 @@ export const CLI = {
     APPROVAL_MODE_YOLO: "yolo",
     RESUME_LATEST: "latest",
     RESUME_CONTINUE: "continue",
+    OUTPUT_FORMAT_TEXT: "text",
+    OUTPUT_FORMAT_JSON: "json",
+    EFFORT_LEVELS: ["low", "medium", "high"],
   },
 } as const;
 
@@ -113,7 +154,10 @@ export interface ToolArguments {
   // Phase 1: Critical flags
   yolo?: boolean | string; // Auto-accept all actions (YOLO mode)
   approvalMode?: string; // Legacy approval mode; only yolo maps to agy
-  outputFormat?: string; // Unsupported legacy Gemini CLI option
+  outputFormat?: string; // agy --output-format: text (default) or json
+  jsonSchema?: string; // agy --json-schema: inline JSON schema for structured_output
+  effort?: string; // agy --effort; rejected by agy for tiered Gemini model names
+  conversationId?: string; // agy --conversation <id>; wins over resume
   includeDirectories?: string | string[]; // Additional directories to include
   debug?: boolean | string; // Unsupported legacy Gemini CLI option
   printTimeout?: string; // agy --print-timeout duration (for example: 5m, 90s)

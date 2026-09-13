@@ -41,7 +41,16 @@ vi.mock('../../utils/agyTranscriptRecovery.js', () => ({
   recoverFromTranscript: (...args: any[]) => mockRecover(...args),
 }));
 
-import { executeAgyCLI, processChangeModeOutput } from '../../utils/agyExecutor.js';
+import {
+  executeAgyCLI,
+  executeAgyJson,
+  processChangeModeOutput,
+  parseAgyJsonEnvelope,
+  renderAgyJsonEnvelope,
+  deniedActionsSummary,
+  formatAgyUsageLine,
+  formatConversationLine,
+} from '../../utils/agyExecutor.js';
 import { CLI, MODELS, ERROR_MESSAGES } from '../../constants.js';
 
 describe('executeAgyCLI', () => {
@@ -179,7 +188,6 @@ describe('executeAgyCLI', () => {
   describe('unsupported legacy Gemini CLI options', () => {
     it.each([
       [{ debug: true }, 'debug'],
-      [{ outputFormat: 'json' }, 'outputFormat'],
       [{ extensions: ['ts'] }, 'extensions'],
       [{ promptInteractive: 'hello' }, 'promptInteractive'],
       [{ approvalMode: 'auto_edit' }, 'approvalMode:auto_edit'],
@@ -457,5 +465,297 @@ new
 
     const result = await processChangeModeOutput(raw, 1, 'bad-key');
     expect(result).toContain('src/fresh.ts');
+  });
+});
+
+const ENVELOPE = {
+  conversation_id: 'conv-abc',
+  status: 'SUCCESS',
+  response: 'plain answer',
+  structured_output: { ok: true },
+  num_turns: 2,
+  duration_seconds: 12.5,
+  usage: { input_tokens: 100, output_tokens: 20, thinking_tokens: 5, cache_read_tokens: 0, total_tokens: 125 },
+  denied_actions: [],
+};
+
+function envelopeLine(overrides: Record<string, unknown> = {}): string {
+  return JSON.stringify({ ...ENVELOPE, ...overrides });
+}
+
+describe('executeAgyCLI json mode', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockIsCacheEnabled.mockReturnValue(false);
+    mockGenerateCacheKey.mockReturnValue('mock-cache-key');
+    mockGetCachedResponse.mockReturnValue(undefined);
+    mockExecuteCommand.mockResolvedValue(envelopeLine());
+  });
+
+  it('adds --output-format json without a schema', async () => {
+    await executeAgyCLI('test', { outputFormat: 'json' });
+
+    const args = mockExecuteCommand.mock.calls[0][1];
+    expect(args).toContain(CLI.FLAGS.OUTPUT_FORMAT);
+    expect(args).toContain('json');
+    expect(args).not.toContain(CLI.FLAGS.JSON_SCHEMA);
+  });
+
+  it('adds --json-schema inline when a schema is given', async () => {
+    const schema = '{"type":"object"}';
+    await executeAgyCLI('test', { outputFormat: 'json', jsonSchema: schema });
+
+    const args = mockExecuteCommand.mock.calls[0][1];
+    expect(args).toContain(CLI.FLAGS.JSON_SCHEMA);
+    expect(args).toContain(schema);
+  });
+
+  it('returns the raw envelope line', async () => {
+    const raw = envelopeLine();
+    mockExecuteCommand.mockResolvedValue(raw);
+
+    expect(await executeAgyCLI('test', { outputFormat: 'json' })).toBe(raw);
+  });
+
+  it('surfaces a fatal ERROR envelope that carries no conversation id', async () => {
+    mockExecuteCommand.mockResolvedValue('{"status":"ERROR","error":"agy could not start"}');
+
+    await expect(executeAgyCLI('test', { outputFormat: 'json' })).rejects.toThrow('agy could not start');
+  });
+
+  it('throws the envelope error text on status ERROR', async () => {
+    mockExecuteCommand.mockResolvedValue(envelopeLine({
+      status: 'ERROR',
+      error: '--effort is not supported for model "Gemini 3.8 Flash (High)"',
+      response: '',
+    }));
+
+    await expect(executeAgyCLI('test', { outputFormat: 'json' }))
+      .rejects.toThrow('--effort is not supported for model "Gemini 3.8 Flash (High)"');
+  });
+
+  it('throws AGY_JSON_PARSE for empty stdout and never runs transcript recovery', async () => {
+    mockExecuteCommand.mockResolvedValue('');
+
+    await expect(executeAgyCLI('test', { outputFormat: 'json' }))
+      .rejects.toThrow(ERROR_MESSAGES.AGY_JSON_PARSE);
+    expect(mockRecover).not.toHaveBeenCalled();
+  });
+
+  it('throws AGY_NO_OUTPUT for the timeout sentinel', async () => {
+    mockExecuteCommand.mockResolvedValue('Error: timed out waiting for response');
+
+    await expect(executeAgyCLI('test', { outputFormat: 'json' }))
+      .rejects.toThrow(ERROR_MESSAGES.AGY_NO_OUTPUT);
+  });
+
+  it('throws with the denied action when agy produced no response', async () => {
+    mockIsCacheEnabled.mockReturnValue(true);
+    mockExecuteCommand.mockResolvedValue(envelopeLine({
+      response: '',
+      structured_output: null,
+      denied_actions: [{ action: 'command', display_name: 'RunCommand' }],
+    }));
+
+    await expect(executeAgyCLI('test', { outputFormat: 'json' }))
+      .rejects.toThrow('RunCommand (command)');
+    expect(mockCacheResponse).not.toHaveBeenCalled();
+  });
+
+  it('resolves when actions were denied but a response still came back', async () => {
+    const raw = envelopeLine({ denied_actions: [{ action: 'command', display_name: 'RunCommand' }] });
+    mockExecuteCommand.mockResolvedValue(raw);
+
+    expect(await executeAgyCLI('test', { outputFormat: 'json' })).toBe(raw);
+  });
+
+  it('throws CONVERSATION_NOT_RESUMED when agy silently started a new conversation', async () => {
+    mockIsCacheEnabled.mockReturnValue(true);
+    mockExecuteCommand.mockResolvedValue(envelopeLine({ conversation_id: 'conv-other' }));
+
+    await expect(executeAgyCLI('test', { outputFormat: 'json', conversationId: 'conv-abc' }))
+      .rejects.toThrow(`${ERROR_MESSAGES.CONVERSATION_NOT_RESUMED} conv-abc`);
+    expect(mockCacheResponse).not.toHaveBeenCalled();
+  });
+
+  it('checks a resume-by-id the same way as conversationId', async () => {
+    mockExecuteCommand.mockResolvedValue(envelopeLine({ conversation_id: 'conv-other' }));
+
+    await expect(executeAgyCLI('test', { outputFormat: 'json', resume: 'conv-abc' }))
+      .rejects.toThrow(`${ERROR_MESSAGES.CONVERSATION_NOT_RESUMED} conv-abc`);
+  });
+
+  it('does not check the conversation for resume: true, which has no requested id', async () => {
+    mockExecuteCommand.mockResolvedValue(envelopeLine({ conversation_id: 'conv-whatever' }));
+
+    await expect(executeAgyCLI('test', { outputFormat: 'json', resume: true })).resolves.toBeTruthy();
+  });
+
+  it('caches a verified envelope', async () => {
+    mockIsCacheEnabled.mockReturnValue(true);
+    const raw = envelopeLine();
+    mockExecuteCommand.mockResolvedValue(raw);
+
+    await executeAgyCLI('test', { outputFormat: 'json' });
+
+    expect(mockCacheResponse).toHaveBeenCalledWith('mock-cache-key', raw);
+  });
+});
+
+describe('option validation', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockIsCacheEnabled.mockReturnValue(false);
+    mockExecuteCommand.mockResolvedValue(envelopeLine());
+  });
+
+  it.each([
+    [{ outputFormat: 'stream-json' }, ERROR_MESSAGES.UNSUPPORTED_OUTPUT_FORMAT],
+    [{ jsonSchema: '{}' }, ERROR_MESSAGES.JSON_SCHEMA_REQUIRES_JSON],
+    [{ effort: 'extreme' }, ERROR_MESSAGES.INVALID_EFFORT],
+    [{ changeMode: true, outputFormat: 'json' }, 'changeMode'],
+    [{ conversationId: '  ' }, ERROR_MESSAGES.INVALID_CONVERSATION_ID],
+  ])('rejects %s', async (options, message) => {
+    await expect(executeAgyCLI('test', options as any)).rejects.toThrow(message);
+    expect(mockExecuteCommand).not.toHaveBeenCalled();
+  });
+
+  it('passes --effort through untouched', async () => {
+    await executeAgyCLI('test', { effort: 'medium' });
+
+    const args = mockExecuteCommand.mock.calls[0][1];
+    expect(args).toContain(CLI.FLAGS.EFFORT);
+    expect(args).toContain('medium');
+  });
+
+  it('leaves text mode arguments unchanged when outputFormat is text', async () => {
+    await executeAgyCLI('test', { outputFormat: 'text' });
+
+    expect(mockExecuteCommand.mock.calls[0][1]).toEqual([
+      CLI.FLAGS.MODEL, MODELS.DEFAULT, CLI.FLAGS.PRINT, 'test',
+    ]);
+  });
+});
+
+describe('conversation resolution', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockIsCacheEnabled.mockReturnValue(false);
+    mockExecuteCommand.mockResolvedValue(envelopeLine());
+  });
+
+  it('prefers an explicit conversationId over resume', async () => {
+    await executeAgyCLI('test', { conversationId: 'conv-abc', resume: true });
+
+    const args = mockExecuteCommand.mock.calls[0][1];
+    expect(args).toContain(CLI.FLAGS.CONVERSATION);
+    expect(args).toContain('conv-abc');
+    expect(args).not.toContain(CLI.FLAGS.CONTINUE);
+  });
+
+  it('hands the explicit conversation id to transcript recovery', async () => {
+    mockExecuteCommand.mockResolvedValue('');
+    mockRecover.mockReturnValue('RECOVERED');
+
+    await executeAgyCLI('test', { conversationId: 'conv-abc' });
+
+    expect(mockRecover).toHaveBeenCalledWith(expect.objectContaining({ conversationId: 'conv-abc' }));
+  });
+
+  it.each([
+    ['resume', { resume: true }],
+    ['conversationId', { conversationId: 'conv-abc' }],
+    ['noCache', { noCache: true }],
+  ])('never touches the cache for %s', async (_label, options) => {
+    mockIsCacheEnabled.mockReturnValue(true);
+
+    await executeAgyCLI('test', options as any);
+
+    expect(mockGetCachedResponse).not.toHaveBeenCalled();
+    expect(mockCacheResponse).not.toHaveBeenCalled();
+  });
+});
+
+describe('executeAgyJson', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockIsCacheEnabled.mockReturnValue(false);
+    mockExecuteCommand.mockResolvedValue(envelopeLine());
+  });
+
+  it('forces json output and returns the parsed envelope', async () => {
+    const envelope = await executeAgyJson('test', { model: 'Gemini 3.8 Flash (Medium)' });
+
+    const args = mockExecuteCommand.mock.calls[0][1];
+    expect(args).toContain(CLI.FLAGS.OUTPUT_FORMAT);
+    expect(envelope.conversation_id).toBe('conv-abc');
+    expect(envelope.structured_output).toEqual({ ok: true });
+  });
+});
+
+describe('parseAgyJsonEnvelope', () => {
+  it('takes the last line that starts with {', () => {
+    const stdout = `starting up\n{"status":"IGNORED"}\n${envelopeLine()}`;
+
+    expect(parseAgyJsonEnvelope(stdout).conversation_id).toBe('conv-abc');
+  });
+
+  it('parses an envelope whose response contains a raw JSON block', () => {
+    const stdout = JSON.stringify({
+      conversation_id: 'conv-abc',
+      status: 'SUCCESS',
+      response: 'PLACEHOLDER',
+    }).replace('"PLACEHOLDER"', '"Use this config:\n{\n  \\"a\\": 1\n}\nDone."');
+
+    const envelope = parseAgyJsonEnvelope(stdout);
+
+    expect(envelope.conversation_id).toBe('conv-abc');
+    expect(envelope.response).toContain('"a": 1');
+  });
+
+  it('retries after escaping raw control characters inside strings', () => {
+    const stdout = '{"conversation_id":"conv-abc","status":"SUCCESS","response":"line one\nline two"}';
+
+    expect(parseAgyJsonEnvelope(stdout).response).toBe('line one\nline two');
+  });
+
+  it.each([
+    ['an empty object', '{}'],
+    ['an object with no status', '{"conversation_id":"conv-abc","response":"hi"}'],
+    ['an unknown status', '{"conversation_id":"conv-abc","status":"PENDING"}'],
+    ['a SUCCESS with no conversation id', '{"status":"SUCCESS","response":"hi"}'],
+  ])('refuses %s as an envelope', (_label, stdout) => {
+    expect(() => parseAgyJsonEnvelope(stdout)).toThrow(ERROR_MESSAGES.AGY_JSON_PARSE);
+  });
+
+  it('accepts an ERROR envelope that never got a conversation id', () => {
+    const envelope = parseAgyJsonEnvelope('{"status":"ERROR","error":"invalid model selection"}');
+
+    expect(envelope.error).toBe('invalid model selection');
+  });
+
+  it('throws AGY_JSON_PARSE with an excerpt when there is no envelope', () => {
+    expect(() => parseAgyJsonEnvelope('total nonsense')).toThrow(ERROR_MESSAGES.AGY_JSON_PARSE);
+    expect(() => parseAgyJsonEnvelope('total nonsense')).toThrow('total nonsense');
+  });
+});
+
+describe('envelope rendering', () => {
+  it('uses structured_output only when this call passed a schema', () => {
+    const envelope = { response: 'plain answer', structured_output: { ok: true } };
+
+    expect(renderAgyJsonEnvelope(envelope, { hadSchema: true })).toContain('"ok": true');
+    expect(renderAgyJsonEnvelope(envelope)).toBe('plain answer');
+  });
+
+  it('summarizes denied actions', () => {
+    expect(deniedActionsSummary({ denied_actions: [{ action: 'command', display_name: 'RunCommand' }] }))
+      .toBe('RunCommand (command)');
+    expect(deniedActionsSummary({})).toBe('');
+  });
+
+  it('formats the usage line and the conversation line', () => {
+    expect(formatAgyUsageLine(ENVELOPE)).toContain('total 125');
+    expect(formatConversationLine('conv-abc')).toBe('[GEMINI_CONVERSATION_ID=conv-abc]');
   });
 });

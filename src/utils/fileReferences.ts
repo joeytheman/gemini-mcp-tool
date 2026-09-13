@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { ERROR_MESSAGES } from '../constants.js';
 
 /**
  * File-reference handling for agy prompts.
@@ -48,7 +49,49 @@ export function isFilesystemRoot(p: string): boolean {
   }
 }
 
-function isWithin(root: string, candidate: string): boolean {
+/**
+ * Resolve a tool's `workingDirectory` argument: it must be an absolute path to
+ * an existing directory that is not a filesystem root, because it becomes both
+ * agy's cwd and its workspace root.
+ */
+export function resolveWorkingDirectory(requested: string): string {
+  // Realpath'd, so that later containment checks compare like with like: on
+  // macOS /tmp/x and /private/tmp/x are the same directory but not the same
+  // string, and a frame reported under one would look OUTSIDE the other.
+  let real: string | null = null;
+  try {
+    const candidate = fs.realpathSync(path.resolve(requested));
+    if (fs.statSync(candidate).isDirectory()) real = candidate;
+  } catch {
+    real = null;
+  }
+  if (!path.isAbsolute(requested) || !real || isFilesystemRoot(real)) {
+    throw new Error(`${ERROR_MESSAGES.INVALID_WORKING_DIRECTORY}. Received '${requested}'.`);
+  }
+  return real;
+}
+
+/**
+ * `target` with its deepest EXISTING ancestor realpath'd, so a path that does
+ * not exist yet can still be compared against a realpath'd root.
+ */
+export function realpathOfExistingPrefix(target: string): string {
+  let current = path.resolve(target);
+  const missing: string[] = [];
+  for (;;) {
+    try {
+      return path.join(fs.realpathSync(current), ...missing);
+    } catch {
+      const parent = path.dirname(current);
+      if (parent === current) return path.resolve(target);
+      missing.unshift(path.basename(current));
+      current = parent;
+    }
+  }
+}
+
+/** True when `candidate` is `root` itself or lives under it. */
+export function isWithin(root: string, candidate: string): boolean {
   const rel = path.relative(root, candidate);
   return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
 }
