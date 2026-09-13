@@ -50,6 +50,24 @@ describe('responseCache', () => {
       expect(key1).not.toBe(key2);
     });
 
+    it('should produce different keys for different json schemas', () => {
+      const key1 = generateCacheKey('test', { outputFormat: 'json', jsonSchema: '{"a":1}' });
+      const key2 = generateCacheKey('test', { outputFormat: 'json', jsonSchema: '{"a":2}' });
+      expect(key1).not.toBe(key2);
+    });
+
+    it('should produce different keys for different effort levels', () => {
+      const key1 = generateCacheKey('test', { effort: 'low' });
+      const key2 = generateCacheKey('test', { effort: 'high' });
+      expect(key1).not.toBe(key2);
+    });
+
+    it('should produce different keys for different conversation IDs', () => {
+      const key1 = generateCacheKey('test', { conversationId: 'conv-a' });
+      const key2 = generateCacheKey('test', { conversationId: 'conv-b' });
+      expect(key1).not.toBe(key2);
+    });
+
     it('should produce different keys for different working directories', () => {
       const key1 = generateCacheKey('test', { cwd: '/project-a' });
       const key2 = generateCacheKey('test', { cwd: '/project-b' });

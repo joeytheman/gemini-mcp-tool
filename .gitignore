@@ -19,3 +19,7 @@ docs/.vitepress/dist/
 *.dxt
 extension-build/
 CLAUDE.md
+
+# Live pass artifacts
+.live-pass/
+.playwright-mcp/

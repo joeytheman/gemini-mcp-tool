@@ -46,12 +46,15 @@ export function generateCacheKey(prompt: string, options: AgyCLIOptions): string
     yolo: options.yolo,
     approvalMode: options.approvalMode,
     outputFormat: options.outputFormat,
+    jsonSchema: options.jsonSchema,
+    effort: options.effort,
     includeDirectories: options.includeDirectories,
     debug: options.debug,
     printTimeout: options.printTimeout,
     promptInteractive: options.promptInteractive,
     extensions: options.extensions,
     resume: options.resume,
+    conversationId: options.conversationId,
     cwd: options.cwd
   });
 

@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+## [2.1.0]
+- Added `live-pass`: Gemini drives its own Playwright or Maestro MCP server, captures frames into a worktree-local artifact directory, looks at them itself, and returns a text verdict. No image reaches the caller's context.
+- Added `screen-review`: Gemini judges captured frames against a reviewer prompt (`mode: "review"`) or inventories a route file's controls before implementation (`mode: "plan"`). Pass `changedRoutes` and a changed screen with no screenshot fails the review — partial coverage is as unreviewed as none.
+- `ask-gemini` gained `outputFormat: "json"` (agy's JSON envelope: conversation ID, response or `structured_output`, usage), `jsonSchema`, `effort`, and `conversationId`.
+- Resumes are verified: when agy silently starts a new conversation instead of resuming the requested one, the call now errors instead of returning an unrelated answer.
+- Denied tool actions with an empty response now fail with the denied action names and a `yolo` hint instead of looking like an empty answer.
+- Resumed, `conversationId` and `noCache` calls are never served from or written to the response cache; the cache key now also covers `jsonSchema`, `effort` and `conversationId`.
+- Transcript recovery prefers an explicitly resumed conversation over the working-directory lookup.
+
 ## [2.0.2]
 - Added support for the `Gemini 3.8 Flash` Low, Medium, and High tiers exposed by `agy models`.
 - Default model changed from `Gemini 3.1 Pro (High)` to `Gemini 3.8 Flash (High)`.

@@ -1,5 +1,17 @@
-import { describe, it, expect } from 'vitest';
-import { askGeminiArgsSchema } from '../tools/ask-gemini.tool.js';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+const mockExecuteAgyCLI = vi.fn();
+const mockExecuteAgyJson = vi.fn();
+vi.mock('../utils/agyExecutor.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../utils/agyExecutor.js')>();
+  return {
+    ...actual,
+    executeAgyCLI: (...args: any[]) => mockExecuteAgyCLI(...args),
+    executeAgyJson: (...args: any[]) => mockExecuteAgyJson(...args),
+  };
+});
+
+import { askGeminiArgsSchema, askGeminiTool } from '../tools/ask-gemini.tool.js';
 
 describe('ask-gemini Tool', () => {
   describe('Argument Schema Validation', () => {
@@ -108,6 +120,25 @@ describe('ask-gemini Tool', () => {
       expect(result.extensions).toEqual(['ts', 'js']);
     });
 
+    it('should accept the json envelope arguments', () => {
+      const result = askGeminiArgsSchema.parse({
+        prompt: 'test',
+        outputFormat: 'json',
+        jsonSchema: '{"type":"object"}',
+        effort: 'medium',
+        conversationId: 'conv-abc',
+      });
+
+      expect(result.outputFormat).toBe('json');
+      expect(result.jsonSchema).toBe('{"type":"object"}');
+      expect(result.effort).toBe('medium');
+      expect(result.conversationId).toBe('conv-abc');
+    });
+
+    it('should reject an effort level agy does not accept', () => {
+      expect(() => askGeminiArgsSchema.parse({ prompt: 'test', effort: 'extreme' })).toThrow();
+    });
+
     it('should accept resume parameter', () => {
       const result = askGeminiArgsSchema.parse({
         prompt: 'test',
@@ -160,6 +191,56 @@ describe('ask-gemini Tool', () => {
       });
       expect(result.yolo).toBe(true);
       expect(result.approvalMode).toBe('auto_edit');
+    });
+  });
+
+  describe('json output', () => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+      mockExecuteAgyJson.mockResolvedValue({
+        conversation_id: 'conv-abc',
+        status: 'SUCCESS',
+        response: 'plain answer',
+        structured_output: { ok: true },
+        num_turns: 1,
+        duration_seconds: 3,
+        usage: { input_tokens: 10, output_tokens: 2, total_tokens: 12 },
+      });
+    });
+
+    it('starts with the conversation line and renders structured output under a schema', async () => {
+      const result = await askGeminiTool.execute({
+        prompt: 'Return ok true',
+        outputFormat: 'json',
+        jsonSchema: '{"type":"object"}',
+        conversationId: 'conv-abc',
+      });
+
+      expect(result.startsWith('[GEMINI_CONVERSATION_ID=conv-abc]')).toBe(true);
+      expect(result).toContain('"ok": true');
+      expect(result).toContain('Usage:');
+      expect(mockExecuteAgyJson).toHaveBeenCalledWith(
+        'Return ok true',
+        expect.objectContaining({ conversationId: 'conv-abc', jsonSchema: '{"type":"object"}' }),
+        undefined
+      );
+      expect(mockExecuteAgyCLI).not.toHaveBeenCalled();
+    });
+
+    it('renders the plain response when no schema was passed', async () => {
+      const result = await askGeminiTool.execute({ prompt: 'hi', outputFormat: 'json' });
+
+      expect(result).toContain('plain answer');
+      expect(result).not.toContain('"ok"');
+    });
+
+    it('uses the text path for the default output format', async () => {
+      mockExecuteAgyCLI.mockResolvedValue('text answer');
+
+      const result = await askGeminiTool.execute({ prompt: 'hi' });
+
+      expect(result).toContain('text answer');
+      expect(mockExecuteAgyJson).not.toHaveBeenCalled();
     });
   });
 

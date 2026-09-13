@@ -48,6 +48,42 @@ describe('Tool Registry', () => {
       expect(fetchChunkTool).toBeDefined();
     });
 
+    it('should include live-pass tool', () => {
+      const tools = getToolDefinitions();
+      const livePass = tools.find(t => t.name === 'live-pass');
+
+      expect(livePass).toBeDefined();
+      expect(livePass?.inputSchema.required).toEqual(
+        expect.arrayContaining(['targets', 'brief', 'workingDirectory', 'driver'])
+      );
+    });
+
+    it('should include screen-review tool', () => {
+      const tools = getToolDefinitions();
+      const screenReview = tools.find(t => t.name === 'screen-review');
+
+      expect(screenReview).toBeDefined();
+      expect(screenReview?.inputSchema.required).toEqual(
+        expect.arrayContaining(['mode', 'instructions', 'workingDirectory'])
+      );
+      expect(screenReview?.inputSchema.properties).toHaveProperty('images');
+      expect(screenReview?.inputSchema.properties).toHaveProperty('routeFile');
+    });
+
+    it('should not advertise defaulted parameters as required', () => {
+      const tools = getToolDefinitions();
+
+      for (const [name, defaulted] of [
+        ['ask-gemini', 'sandbox'],
+        ['live-pass', 'yolo'],
+        ['screen-review', 'model'],
+      ] as const) {
+        const tool = tools.find(t => t.name === name);
+        expect(tool?.inputSchema.properties).toHaveProperty(defaulted);
+        expect(tool?.inputSchema.required).not.toContain(defaulted);
+      }
+    });
+
     it('should have valid input schemas', () => {
       const tools = getToolDefinitions();
 
@@ -67,6 +103,8 @@ describe('Tool Registry', () => {
       expect(toolExists('ping')).toBe(true);
       expect(toolExists('Help')).toBe(true);
       expect(toolExists('fetch-chunk')).toBe(true);
+      expect(toolExists('live-pass')).toBe(true);
+      expect(toolExists('screen-review')).toBe(true);
     });
 
     it('should return false for non-existent tools', () => {
@@ -140,7 +178,7 @@ describe('Tool Registry', () => {
     it('Gemini tools should advertise the current default and verified alternatives', () => {
       const tools = getToolDefinitions();
 
-      for (const toolName of ['ask-gemini', 'brainstorm']) {
+      for (const toolName of ['ask-gemini', 'brainstorm', 'live-pass', 'screen-review']) {
         const tool = tools.find(t => t.name === toolName);
         const modelSchema = tool?.inputSchema.properties?.model as { description?: string } | undefined;
 
@@ -174,6 +212,8 @@ describe('Tool Registry', () => {
       expect(brainstorm?.category).toBe('gemini');
       expect(ping?.category).toBe('simple');
       expect(fetchChunk?.category).toBe('utility');
+      expect(toolRegistry.find(t => t.name === 'live-pass')?.category).toBe('gemini');
+      expect(toolRegistry.find(t => t.name === 'screen-review')?.category).toBe('gemini');
     });
   });
 

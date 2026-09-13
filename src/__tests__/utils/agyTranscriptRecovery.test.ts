@@ -118,4 +118,33 @@ describe('recoverFromTranscript', () => {
     setMap({ '/proj': 'conv1' }); // map present, transcript absent
     expect(recoverFromTranscript({ cwd: '/proj', runStartMs: RUN_START })).toBeNull();
   });
+
+  it('reads only the explicitly requested conversation, ignoring the cwd map', () => {
+    setMap({ '/proj': 'conv1' });
+    setTranscript('conv1', [finalResponse('LATEST FOR CWD')]);
+    setTranscript('conv2', [finalResponse('RESUMED')]);
+
+    expect(recoverFromTranscript({ cwd: '/proj', conversationId: 'conv2', runStartMs: RUN_START }))
+      .toBe('RESUMED');
+  });
+
+  it('refuses a conversation id that would escape the brain directory', () => {
+    setMap({ '/proj': 'conv1' });
+    setTranscript('conv1', [finalResponse('ANSWER')]);
+    setTranscript('../../../etc/passwd', [finalResponse('SECRET')]);
+
+    expect(recoverFromTranscript({
+      cwd: '/proj',
+      conversationId: '../../../etc/passwd',
+      runStartMs: RUN_START,
+    })).toBeNull();
+  });
+
+  it('falls back to the cwd lookup when no conversation id is given', () => {
+    setMap({ '/proj': 'conv1' });
+    setTranscript('conv1', [finalResponse('LATEST FOR CWD')]);
+
+    expect(recoverFromTranscript({ cwd: '/proj', conversationId: '  ', runStartMs: RUN_START }))
+      .toBe('LATEST FOR CWD');
+  });
 });
