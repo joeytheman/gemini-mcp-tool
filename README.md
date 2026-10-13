@@ -28,7 +28,7 @@ This is a simple Model Context Protocol (MCP) server that lets AI assistants ask
 
 **Goal**: Use Gemini's analysis capabilities directly from Codex or Claude Code for reviews, critiques, and large-file questions.
 
-## Unreleased
+## What's New in 2.2
 
 - **Gemini 4 Argon support** — `ask-gemini` and `brainstorm` now default to **Gemini 4 Argon (High)**. Argon Low and Medium are available as explicit overrides when listed by `agy models`. `live-pass` and `screen-review` continue to default to **Gemini 3.8 Flash (Medium)**.
 
