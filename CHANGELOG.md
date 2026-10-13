@@ -1,8 +1,11 @@
 # Changelog
 
 ## [Unreleased]
+
+## [2.2.0]
 - Default model for `ask-gemini` and `brainstorm` changed to `Gemini 4 Argon (High)`; `live-pass` and `screen-review` continue to default to `Gemini 3.8 Flash (Medium)`.
 - Added Gemini 4 Argon Low, Medium, and High tiers to the advertised model choices and updated setup guidance for account-dependent availability. Explicit model overrides remain supported, with no automatic fallback.
+- Package and MCP server versions synchronized at `2.2.0`.
 
 ## [2.1.0]
 - Added `live-pass`: Gemini drives its own Playwright or Maestro MCP server, captures frames into a worktree-local artifact directory, looks at them itself, and returns a text verdict. No image reaches the caller's context.
