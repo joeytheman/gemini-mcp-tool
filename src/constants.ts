@@ -58,12 +58,12 @@ export const STATUS_MESSAGES = {
 // Models. The tier in an Antigravity model name IS its reasoning effort, which
 // is why `--effort` is rejected for these names.
 export const MODELS = {
-  DEFAULT: "Gemini 3.8 Flash (High)",
+  DEFAULT: "Gemini 4 Argon (High)",
   MEDIUM: "Gemini 3.8 Flash (Medium)",
 } as const;
 
 export const MODEL_CHOICE_DESCRIPTION =
-  "Optional Antigravity model name. Verified options: 'Gemini 3.8 Flash (Low)', 'Gemini 3.8 Flash (Medium)', 'Gemini 3.8 Flash (High)', 'Gemini 3.1 Pro (Low)', and 'Gemini 3.1 Pro (High)'. The tier in the name is the reasoning effort.";
+  "Optional Antigravity model name. Verified options: 'Gemini 4 Argon (Low)', 'Gemini 4 Argon (Medium)', 'Gemini 4 Argon (High)', 'Gemini 3.8 Flash (Low)', 'Gemini 3.8 Flash (Medium)', and 'Gemini 3.8 Flash (High)'. Availability depends on your CLI version and account; check `agy models`. Some accounts also expose 'Gemini 3.1 Pro (Low)' and 'Gemini 3.1 Pro (High)'. The tier in the name is the reasoning effort.";
 
 // Live UI pass / screen review
 export const LIVE_PASS = {

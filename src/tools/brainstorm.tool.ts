@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { UnifiedTool } from './registry.js';
 import { Logger } from '../utils/logger.js';
 import { executeAgyCLI } from '../utils/agyExecutor.js';
+import { MODELS, MODEL_CHOICE_DESCRIPTION } from '../constants.js';
 
 function buildBrainstormPrompt(config: {
   prompt: string;
@@ -117,7 +118,7 @@ ${domain ? `Given the ${domain} domain, I'll apply the most effective combinatio
 
 const brainstormArgsSchema = z.object({
   prompt: z.string().min(1).describe("Primary brainstorming challenge or question to explore"),
-  model: z.string().optional().describe("Optional Antigravity model name. Defaults to 'Gemini 3.8 Flash (High)'. Other verified options include 'Gemini 3.8 Flash (Low)', 'Gemini 3.8 Flash (Medium)', 'Gemini 3.1 Pro (Low)', and 'Gemini 3.1 Pro (High)'."),
+  model: z.string().optional().describe(`${MODEL_CHOICE_DESCRIPTION} Defaults to '${MODELS.DEFAULT}'.`),
   methodology: z.enum(['divergent', 'convergent', 'scamper', 'design-thinking', 'lateral', 'auto']).default('auto').describe("Brainstorming framework: 'divergent' (generate many ideas), 'convergent' (refine existing), 'scamper' (systematic triggers), 'design-thinking' (human-centered), 'lateral' (unexpected connections), 'auto' (AI selects best)"),
   domain: z.string().optional().describe("Domain context for specialized brainstorming (e.g., 'software', 'business', 'creative', 'research', 'product', 'marketing')"),
   constraints: z.string().optional().describe("Known limitations, requirements, or boundaries (budget, time, technical, legal, etc.)"),

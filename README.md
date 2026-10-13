@@ -28,6 +28,10 @@ This is a simple Model Context Protocol (MCP) server that lets AI assistants ask
 
 **Goal**: Use Gemini's analysis capabilities directly from Codex or Claude Code for reviews, critiques, and large-file questions.
 
+## Unreleased
+
+- **Gemini 4 Argon support** — `ask-gemini` and `brainstorm` now default to **Gemini 4 Argon (High)**. Argon Low and Medium are available as explicit overrides when listed by `agy models`. `live-pass` and `screen-review` continue to default to **Gemini 3.8 Flash (Medium)**.
+
 ## What's New in 2.1
 
 - **`live-pass`** — hand a live UI verification to Gemini. It drives its own Playwright (web) or Maestro (iOS simulator) MCP server, captures each requested screen/state/viewport into an artifact directory inside the worktree under test, opens every PNG itself, and returns a PASS/FAIL/BLOCKED verdict with a sentence per frame. The caller never opens an image. The verdict is derived in code from the requested targets, so a frame Gemini forgot, a stale PNG, or an uncovered target fails the pass even when Gemini says PASS.
@@ -67,7 +71,7 @@ agy install
 agy models
 ```
 
-The default requires `Gemini 3.8 Flash (High)` to appear in `agy models`. If it is missing, update Antigravity CLI and rerun setup. Until 3.8 is available, pass an exact model shown by `agy models`, such as `model: "Gemini 3.1 Pro (High)"`.
+The `ask-gemini` and `brainstorm` default requires `Gemini 4 Argon (High)` to appear in `agy models` (verified with agy 1.3.4). Google currently lists Argon access in Antigravity for **Google AI Ultra and Enterprise** accounts; see [model availability](https://antigravity.google/docs/models/). If Argon is missing, update Antigravity CLI and check your account's access. You can explicitly select an available Flash tier, such as `model: "Gemini 3.8 Flash (High)"`. The MCP server does not automatically fall back. `live-pass` and `screen-review` continue to require `Gemini 3.8 Flash (Medium)` for their default requests.
 
 
 ### One-Line Setup
@@ -212,7 +216,7 @@ These tools are designed to be used by the AI assistant.
 
 - **`ask-gemini`**: Ask Gemini through Antigravity CLI (`agy`) for plan review, implementation critique, code review, architecture feedback, debugging, and tradeoff analysis.
   - **`prompt`** (required): The analysis request. Use the `@` syntax to include file or directory references (e.g., `@src/main.js review this implementation`) or ask general questions.
-  - **`model`** (optional): The Antigravity model to use. Defaults to `Gemini 3.8 Flash (High)`. Verified options also include `Gemini 3.8 Flash (Low)`, `Gemini 3.8 Flash (Medium)`, `Gemini 3.1 Pro (Low)`, and `Gemini 3.1 Pro (High)`.
+  - **`model`** (optional): The Antigravity model to use. Defaults to `Gemini 4 Argon (High)`. Other verified options include `Gemini 4 Argon (Low)`, `Gemini 4 Argon (Medium)`, and `Gemini 3.8 Flash (Low/Medium/High)` (use the exact tier name, such as `Gemini 3.8 Flash (High)`). Availability depends on your CLI version and account; check `agy models`. Some accounts also expose `Gemini 3.1 Pro (Low)` and `Gemini 3.1 Pro (High)`.
   - **`sandbox`** (optional): Set to `true` to pass `--sandbox`.
   - **`changeMode`** (optional): Enable structured change mode for edit suggestions that Claude can apply directly.
   - **`yolo`** (optional): Pass `--dangerously-skip-permissions`. Use with caution.
@@ -245,11 +249,12 @@ These tools are designed to be used by the AI assistant.
   - **`context`** (optional): Composition contract, issue text, anything else the reviewer prompt cites.
   - **`changedRoutes`** (optional, review mode): Repo-relative files the diff touched (from `git diff --name-only`). Gemini maps each image to the route file it shows, and a changed screen (under an `app/` directory) that no image shows makes the review REQUEST_CHANGES — partial screenshot coverage is as unreviewed as none. A changed file under `components/` only warns. The report prints a route → image coverage table.
   - **`conversationId`** (optional): Round 2 keeps round 1's visual analysis.
+  - **`model`** (optional, default `Gemini 3.8 Flash (Medium)`), **`printTimeout`** (optional, default `10m`).
   - **`yolo`** (optional, default **false**): a review only reads. Set it to `true` when the instructions ask Gemini to read repository files that are not among the images — it reaches for a shell to do that, headless agy denies the shell, and the call fails naming the denied action.
 
 - **`brainstorm`**: Generate creative ideas with structured methodologies and domain context.
   - **`prompt`** (required): Brainstorming challenge or question to explore.
-  - **`model`** (optional): The Antigravity model to use. Defaults to `Gemini 3.8 Flash (High)`.
+  - **`model`** (optional): The Antigravity model to use. Defaults to `Gemini 4 Argon (High)`. Pass an exact model listed by `agy models` to override it.
   - **`methodology`** (optional): Framework to use: `divergent`, `convergent`, `scamper`, `design-thinking`, `lateral`, or `auto` (default).
   - **`domain`** (optional): Domain context (e.g., 'software', 'business', 'creative', 'research').
   - **`constraints`** (optional): Known limitations or requirements.

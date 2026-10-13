@@ -50,10 +50,14 @@ Include configuration with implementation:
 ## Token Management
 
 ### Gemini Model Selection
-- **Coding and complex analysis (default)**: Use `Gemini 3.8 Flash (High)`
+- **Coding, complex analysis, and brainstorming (default)**: Use `Gemini 4 Argon (High)` for `ask-gemini` and `brainstorm`
+- **Other Argon reasoning tiers**: Choose `Gemini 4 Argon (Low)` or `Gemini 4 Argon (Medium)` explicitly
+- **Live UI passes and screen reviews (default)**: Keep `Gemini 3.8 Flash (Medium)` for `live-pass` and `screen-review`
 - **Balanced general work**: Use `Gemini 3.8 Flash (Medium)`
 - **Quick tasks**: Use `Gemini 3.8 Flash (Low)`
-- **Explicit alternative**: Use `Gemini 3.1 Pro (Low)` or `Gemini 3.1 Pro (High)` when preferred or when 3.8 is unavailable
+- **Explicit alternatives**: Use `Gemini 3.8 Flash (High)` when Argon is unavailable, or a Pro tier when listed by `agy models`
+
+Model availability depends on your CLI version and account. Argon currently requires Google AI Ultra or Enterprise access in Antigravity; see [model availability](https://antigravity.google/docs/models/). Check `agy models` and pass an available model explicitly; the server does not automatically fall back.
 
 ### Efficient File Inclusion
 ```bash

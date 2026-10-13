@@ -140,6 +140,7 @@ describe('livePassArgsSchema', () => {
     expect(parsed.printTimeout).toBe(LIVE_PASS.DEFAULT_PRINT_TIMEOUT);
     expect(parsed.printTimeout).toBe('15m');
     expect(parsed.model).toBe(MODELS.MEDIUM);
+    expect(parsed.model).toBe('Gemini 3.8 Flash (Medium)');
   });
 
   it('requires a driver and at least one target', () => {

@@ -66,7 +66,7 @@ describe('executeAgyCLI', () => {
     it('should use agy with the default Gemini model and print mode', async () => {
       await executeAgyCLI('test', {});
 
-      expect(MODELS.DEFAULT).toBe('Gemini 3.8 Flash (High)');
+      expect(MODELS.DEFAULT).toBe('Gemini 4 Argon (High)');
       expect(mockExecuteCommand).toHaveBeenCalledWith(
         CLI.COMMANDS.AGY,
         [CLI.FLAGS.MODEL, MODELS.DEFAULT, CLI.FLAGS.PRINT, 'test'],
@@ -75,12 +75,17 @@ describe('executeAgyCLI', () => {
       );
     });
 
-    it('should add model flag when specified', async () => {
-      await executeAgyCLI('test', { model: 'Gemini 3.8 Flash (Medium)' });
+    it.each([
+      'Gemini 4 Argon (Low)',
+      'Gemini 4 Argon (Medium)',
+      'Gemini 4 Argon (High)',
+      'Gemini 3.8 Flash (Medium)',
+      'gemini-4-argon-medium',
+    ])('should pass the explicit model %s unchanged', async (model) => {
+      await executeAgyCLI('test', { model });
 
       const args = mockExecuteCommand.mock.calls[0][1];
-      expect(args).toContain(CLI.FLAGS.MODEL);
-      expect(args).toContain('Gemini 3.8 Flash (Medium)');
+      expect(args.slice(0, 2)).toEqual([CLI.FLAGS.MODEL, model]);
     });
 
     it('should add sandbox flag when specified', async () => {
@@ -198,6 +203,15 @@ describe('executeAgyCLI', () => {
   });
 
   describe('no fallback behavior', () => {
+    it('should surface an unavailable default model without retrying', async () => {
+      mockExecuteCommand.mockRejectedValueOnce(new Error('invalid model selection: Gemini 4 Argon (High)'));
+
+      await expect(executeAgyCLI('test', {}))
+        .rejects.toThrow('invalid model selection: Gemini 4 Argon (High)');
+
+      expect(mockExecuteCommand).toHaveBeenCalledTimes(1);
+    });
+
     it('should not retry when the agy backend reports resource exhaustion', async () => {
       mockExecuteCommand.mockRejectedValueOnce(new Error('RESOURCE_EXHAUSTED'));
 
@@ -690,6 +704,14 @@ describe('executeAgyJson', () => {
     expect(args).toContain(CLI.FLAGS.OUTPUT_FORMAT);
     expect(envelope.conversation_id).toBe('conv-abc');
     expect(envelope.structured_output).toEqual({ ok: true });
+  });
+
+  it('uses Argon High when the model is omitted in json mode', async () => {
+    await executeAgyJson('test', {});
+
+    const args = mockExecuteCommand.mock.calls[0][1];
+    expect(args.slice(0, 2)).toEqual([CLI.FLAGS.MODEL, 'Gemini 4 Argon (High)']);
+    expect(args).toContain(CLI.FLAGS.OUTPUT_FORMAT);
   });
 });
 
