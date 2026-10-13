@@ -48,12 +48,14 @@ It's how you reference files for analysis:
 Yes! Gemini's large context window allows analyzing entire codebases.
 
 ### Which model should I use?
-- **Coding and complex analysis**: Gemini 3.8 Flash (High) *(default)*
+- **Coding, complex analysis, and brainstorming**: Gemini 4 Argon (High) *(default for `ask-gemini` and `brainstorm`)*
+- **Other Argon reasoning tiers**: Gemini 4 Argon (Low) or Gemini 4 Argon (Medium)
+- **Live UI passes and screen reviews**: Gemini 3.8 Flash (Medium) *(default for `live-pass` and `screen-review`)*
 - **Daily work**: Gemini 3.8 Flash (Medium)
 - **Quick tasks**: Gemini 3.8 Flash (Low)
-- **Explicit alternatives**: `Gemini 3.1 Pro (Low)` or `Gemini 3.1 Pro (High)`
+- **Explicit alternatives**: Gemini 3.8 Flash (High), or `Gemini 3.1 Pro (Low)` / `Gemini 3.1 Pro (High)` when your account lists them
 
-Run `agy models` to confirm availability. If the Gemini 3.8 tiers are missing, update Antigravity CLI and explicitly select a model that is listed; the MCP server does not automatically fall back.
+Run `agy models` to confirm availability. Argon currently requires Google AI Ultra or Enterprise access in Antigravity; see [model availability](https://antigravity.google/docs/models/). If it is missing, update Antigravity CLI and check your account's access, or explicitly select an available model such as `model: "Gemini 3.8 Flash (High)"`. The MCP server does not automatically fall back.
 
 ## Features
 

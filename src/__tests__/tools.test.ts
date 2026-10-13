@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { toolRegistry, getToolDefinitions, toolExists, getPromptDefinitions } from '../tools/index.js';
-import { CLI, MODELS } from '../constants.js';
+import { CLI } from '../constants.js';
 
 describe('Tool Registry', () => {
   describe('getToolDefinitions', () => {
@@ -175,16 +175,29 @@ describe('Tool Registry', () => {
       expect(brainstormTool?.inputSchema.properties).toHaveProperty('methodology');
     });
 
-    it('Gemini tools should advertise the current default and verified alternatives', () => {
+    it('Gemini tools should advertise their own defaults and available alternatives', () => {
       const tools = getToolDefinitions();
 
-      for (const toolName of ['ask-gemini', 'brainstorm', 'live-pass', 'screen-review']) {
+      for (const [toolName, defaultModel] of [
+        ['ask-gemini', 'Gemini 4 Argon (High)'],
+        ['brainstorm', 'Gemini 4 Argon (High)'],
+        ['live-pass', 'Gemini 3.8 Flash (Medium)'],
+        ['screen-review', 'Gemini 3.8 Flash (Medium)'],
+      ]) {
         const tool = tools.find(t => t.name === toolName);
-        const modelSchema = tool?.inputSchema.properties?.model as { description?: string } | undefined;
+        const modelSchema = tool?.inputSchema.properties?.model as { description?: string; default?: string } | undefined;
 
-        expect(modelSchema?.description).toContain(MODELS.DEFAULT);
+        expect(modelSchema?.description).toContain(`Defaults to '${defaultModel}'.`);
+        expect(tool?.inputSchema.required).not.toContain('model');
+        if (toolName === 'live-pass' || toolName === 'screen-review') {
+          expect(modelSchema?.default).toBe(defaultModel);
+        }
+        expect(modelSchema?.description).toContain('Gemini 4 Argon (Low)');
+        expect(modelSchema?.description).toContain('Gemini 4 Argon (Medium)');
+        expect(modelSchema?.description).toContain('Gemini 4 Argon (High)');
         expect(modelSchema?.description).toContain('Gemini 3.8 Flash (Low)');
         expect(modelSchema?.description).toContain('Gemini 3.8 Flash (Medium)');
+        expect(modelSchema?.description).toContain('Gemini 3.8 Flash (High)');
         expect(modelSchema?.description).toContain('Gemini 3.1 Pro (Low)');
         expect(modelSchema?.description).toContain('Gemini 3.1 Pro (High)');
       }

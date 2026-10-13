@@ -107,6 +107,7 @@ describe('screenReviewArgsSchema', () => {
 
     expect(parsed.yolo).toBe(false);
     expect(parsed.model).toBe(MODELS.MEDIUM);
+    expect(parsed.model).toBe('Gemini 3.8 Flash (Medium)');
     expect(parsed.printTimeout).toBe(LIVE_PASS.SCREEN_REVIEW_PRINT_TIMEOUT);
   });
 

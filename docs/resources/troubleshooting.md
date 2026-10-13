@@ -113,7 +113,7 @@ claude mcp add gemini-feedback -- npx @joeytheman/gemini-mcp-tool
    agy models
    ```
 
-   `Gemini 3.8 Flash (High)` must appear in `agy models` for default requests. If it is missing, update Antigravity CLI and explicitly pass an available model such as `model:"Gemini 3.1 Pro (High)"`. The MCP server does not automatically fall back.
+   `Gemini 4 Argon (High)` must appear in `agy models` for default `ask-gemini` and `brainstorm` requests. Argon currently requires Google AI Ultra or Enterprise access in Antigravity; see [model availability](https://antigravity.google/docs/models/). If it is missing, update Antigravity CLI and check your account's access, or explicitly pass an available model such as `model:"Gemini 3.8 Flash (High)"`. The MCP server does not automatically fall back. `live-pass` and `screen-review` continue to default to `Gemini 3.8 Flash (Medium)`.
 
 </TroubleshootingModal>
 
@@ -285,11 +285,13 @@ agy changelog
 
 | **Use Case** | **Recommended Model** | **Reason** |
 |--------------|----------------------|------------|
-| Complex analysis | `Gemini 3.8 Flash (High)` | Default with the High reasoning budget |
-| Architecture review | `Gemini 3.8 Flash (High)` | Recommended for complex coding tasks |
+| Complex analysis and brainstorming | `Gemini 4 Argon (High)` | Default for `ask-gemini` and `brainstorm` |
+| Architecture review | `Gemini 4 Argon (High)` | High reasoning budget for complex coding tasks |
+| Live UI passes and screen reviews | `Gemini 3.8 Flash (Medium)` | Default for `live-pass` and `screen-review` |
 | Quick tasks | `Gemini 3.8 Flash (Low)` | Lowest reasoning budget |
 | General work | `Gemini 3.8 Flash (Medium)` | Balanced reasoning and latency |
-| Explicit alternative | `Gemini 3.1 Pro (Low)` / `Gemini 3.1 Pro (High)` | Use when preferred or 3.8 is unavailable |
+| Flash alternative | `Gemini 3.8 Flash (High)` | Select explicitly when Argon is unavailable |
+| Pro alternative | `Gemini 3.1 Pro (Low)` / `Gemini 3.1 Pro (High)` | Use only when listed by `agy models` |
 
 ## Quick Fixes
 
