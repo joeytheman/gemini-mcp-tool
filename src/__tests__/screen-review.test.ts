@@ -171,6 +171,43 @@ describe('screenReviewArgsSchema', () => {
     }
   });
 
+  it('accepts a plain git ref as baseRef in review mode', () => {
+    const workDir = makeWorkDir();
+    const image = writeFile(workDir, 'home.png');
+
+    for (const baseRef of ['origin/main', 'main', 'HEAD~3', 'v2.2.0', '17b41c7', 'main@{1}']) {
+      const parsed = screenReviewArgsSchema.parse({
+        mode: 'review', instructions: 'i', workingDirectory: workDir, images: [image], baseRef,
+      });
+
+      expect(parsed.baseRef).toBe(baseRef);
+    }
+  });
+
+  it.each([
+    ['an option', '--output=/tmp/x'],
+    ['whitespace', 'origin/main extra'],
+    ['a shell substitution', '$(touch x)'],
+    ['a command separator', 'main;rm'],
+    ['an empty string', ''],
+  ])('rejects a baseRef that is %s', (_label, baseRef) => {
+    const workDir = makeWorkDir();
+    const image = writeFile(workDir, 'home.png');
+
+    expect(() => screenReviewArgsSchema.parse({
+      mode: 'review', instructions: 'i', workingDirectory: workDir, images: [image], baseRef,
+    })).toThrow(/baseRef is not a plain git ref/);
+  });
+
+  it('rejects baseRef in plan mode', () => {
+    const workDir = makeWorkDir();
+    const route = writeFile(workDir, 'app/orders.tsx');
+
+    expect(() => screenReviewArgsSchema.parse({
+      mode: 'plan', instructions: 'i', workingDirectory: workDir, routeFile: route, baseRef: 'origin/main',
+    })).toThrow(/baseRef is review mode only/);
+  });
+
   it('accepts a plan routeFile inside the working directory', () => {
     const workDir = makeWorkDir();
     const route = writeFile(workDir, 'app/orders.tsx');
@@ -250,6 +287,67 @@ describe('buildScreenReviewPrompt', () => {
     expect(prompt).toContain('@/work/app/orders.tsx');
     expect(prompt).toContain('no verdict');
     expect(prompt).not.toContain('Open every image');
+  });
+});
+
+describe('buildScreenReviewPrompt: bounded reads', () => {
+  const ALLOWED = [
+    'Read only the code the checklist needs as evidence, and only the lines you need:',
+    '- the rule files and READMEs the instructions cite;',
+    '- the board or design files the instructions name;',
+    '- the shared UI primitives a control uses or should use;',
+    '- the producer lines (serializers, services, hooks) behind a capability or viewer-scoped field the checklist asks about.',
+  ];
+  const BANNED = 'Never run tests, Jest, npm or any package script. Never read node_modules, release notes or changelog fragments. Never re-read the file the instructions came from: they are above, verbatim.';
+
+  const review = (overrides: { baseRef?: string; changedRoutes?: string[] } = {}) =>
+    buildScreenReviewPrompt({ mode: 'review', instructions: 'i', images: ['/frames/a.png'], ...overrides });
+  const plan = () => buildScreenReviewPrompt({ mode: 'plan', instructions: 'i', routeFile: '/work/app/orders.tsx' });
+
+  it.each([['review', review], ['plan', plan]] as const)('allows the evidence reads and bans tests, npm, node_modules and release notes in %s mode', (_mode, build) => {
+    const prompt = build();
+
+    expect(prompt).toContain('## Reading code (bounded)');
+    for (const line of ALLOWED) {
+      expect(prompt).toContain(line);
+    }
+    expect(prompt).toContain(BANNED);
+  });
+
+  it('points review mode at the changed route files listed above it', () => {
+    const prompt = review({ changedRoutes: ['app/orders.tsx'] });
+
+    expect(prompt.indexOf('## Changed files in this diff')).toBeLessThan(prompt.indexOf('## Reading code (bounded)'));
+    expect(prompt).toContain('- the changed route files listed above;');
+  });
+
+  it('points review mode at the changed route files the context names when none were passed', () => {
+    expect(review()).toContain('- the changed route files the context names;');
+  });
+
+  it('points plan mode at its own route file', () => {
+    expect(plan()).toContain('- the route file above;');
+  });
+
+  it('allows read-only git diff and git show against the baseRef in review mode', () => {
+    const prompt = review({ baseRef: 'origin/main' });
+
+    expect(prompt).toContain('Severity follows the diff: you may run read-only `git diff origin/main` (optionally `-- <path>`) and `git show origin/main:<path>` to see what changed. No other git command.');
+    expect(prompt).not.toContain('Never run git.');
+  });
+
+  it('allows no git in review mode without a baseRef, nor in plan mode', () => {
+    expect(review()).toContain('Never run git.');
+    expect(review()).not.toContain('git diff');
+    expect(plan()).toContain('Never run git.');
+    expect(plan()).not.toContain('git diff');
+  });
+
+  it('keeps the image instruction ahead of any code reading', () => {
+    const prompt = review({ baseRef: 'origin/main' });
+
+    expect(prompt).toContain('Open every image below before reading any code. You are the second pair of eyes on frames someone else captured');
+    expect(prompt.indexOf('Open every image below')).toBeLessThan(prompt.indexOf('## Reading code (bounded)'));
   });
 });
 
@@ -402,6 +500,16 @@ describe('screen-review execute', () => {
     expect(prompt).toContain(`@${image}`);
     expect(options).toMatchObject({ cwd: workDir, yolo: false, noCache: true, model: MODELS.MEDIUM });
     expect(options.includeDirectories).toEqual([workDir, path.dirname(image)]);
+  });
+
+  it('passes baseRef through to the prompt', async () => {
+    const workDir = makeWorkDir();
+    const image = writeFile(workDir, 'frames/home.png');
+    mockExecuteAgyJson.mockResolvedValue(envelope(makeReviewResult({ screens: [makeScreen(image)] })));
+
+    await run({ mode: 'review', instructions: 'judge', workingDirectory: workDir, images: [image], baseRef: 'origin/main' });
+
+    expect(mockExecuteAgyJson.mock.calls[0][0]).toContain('`git diff origin/main`');
   });
 
   it('rejects a working directory that does not exist', async () => {

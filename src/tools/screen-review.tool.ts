@@ -17,6 +17,8 @@ import { ERROR_MESSAGES, LIVE_PASS, MODELS, MODEL_CHOICE_DESCRIPTION } from '../
 
 const IMAGE_EXTENSIONS = /\.(png|jpe?g)$/i;
 const WHITESPACE = /\s/;
+// Printed into a git command line Gemini runs, so no option-like or shell-active spelling.
+const GIT_REF = /^(?!-)[A-Za-z0-9._\/@^~{}-]+$/;
 
 // ---------------------------------------------------------------- arguments
 
@@ -36,11 +38,15 @@ export const screenReviewArgsSchema = z.object({
   images: z.array(z.string()).optional().describe("review mode only: absolute paths to the PNG/JPEG frames to judge. Each must exist."),
   changedRoutes: z.array(z.string()).optional().describe("review mode: repo-relative route/component files the diff touched (from `git diff --name-only`). Every changed screen file (under an `app/` directory) that no image shows makes the review REQUEST_CHANGES; a changed file under `components/` only warns."),
   routeFile: z.string().optional().describe("plan mode only: absolute path to the route/screen source file to inventory. Must exist inside workingDirectory."),
+  baseRef: z.string().optional().describe("review mode only: the git ref the diff under review is based on, such as 'origin/main'. Gemini may then run read-only `git diff <baseRef>` and `git show <baseRef>:<path>` to judge severity by what changed; that needs yolo: true, because headless agy denies the shell otherwise. Without baseRef Gemini runs no git at all."),
   model: z.string().default(MODELS.MEDIUM).describe(`${MODEL_CHOICE_DESCRIPTION} Defaults to '${MODELS.MEDIUM}'.`),
   printTimeout: z.string().default(LIVE_PASS.SCREEN_REVIEW_PRINT_TIMEOUT).describe("agy --print-timeout for the review."),
   yolo: z.boolean().default(false).describe("Pass --dangerously-skip-permissions. Defaults to false because a review only reads. Set it to true when the instructions ask Gemini to read repository files that are not passed as images: it reaches for a shell to do that, headless agy denies the shell, and the call then fails naming the denied action."),
   conversationId: z.string().min(1).optional().describe("Resume a previous review so round 2 keeps round 1's visual analysis."),
 }).superRefine((value, ctx) => {
+  if (value.baseRef !== undefined && !GIT_REF.test(value.baseRef)) {
+    ctx.addIssue({ code: 'custom', message: `baseRef is not a plain git ref: ${value.baseRef}`, path: ['baseRef'] });
+  }
   if (value.mode === 'review') {
     if (value.routeFile) {
       ctx.addIssue({ code: 'custom', message: 'routeFile is plan mode only', path: ['routeFile'] });
@@ -65,6 +71,9 @@ export const screenReviewArgsSchema = z.object({
 
   if (value.images) {
     ctx.addIssue({ code: 'custom', message: 'images is review mode only', path: ['images'] });
+  }
+  if (value.baseRef !== undefined) {
+    ctx.addIssue({ code: 'custom', message: 'baseRef is review mode only', path: ['baseRef'] });
   }
   const routeFile = value.routeFile;
   if (!routeFile || !path.isAbsolute(routeFile) || !fileExists(routeFile)) {
@@ -142,6 +151,25 @@ const SCHEMA_TEXT = {
 
 // ------------------------------------------------------------------- prompt
 
+function readingSection(config: { mode: 'review' | 'plan'; changedRoutes: string[]; baseRef?: string }): string {
+  const routeFiles = config.mode === 'plan'
+    ? 'the route file above'
+    : config.changedRoutes.length > 0 ? 'the changed route files listed above' : 'the changed route files the context names';
+  const git = config.mode === 'review' && config.baseRef
+    ? `Severity follows the diff: you may run read-only \`git diff ${config.baseRef}\` (optionally \`-- <path>\`) and \`git show ${config.baseRef}:<path>\` to see what changed. No other git command.`
+    : 'Never run git.';
+  return `## Reading code (bounded)
+Read only the code the checklist needs as evidence, and only the lines you need:
+- the rule files and READMEs the instructions cite;
+- ${routeFiles};
+- the board or design files the instructions name;
+- the shared UI primitives a control uses or should use;
+- the producer lines (serializers, services, hooks) behind a capability or viewer-scoped field the checklist asks about.
+${git}
+Never run tests, Jest, npm or any package script. Never read node_modules, release notes or changelog fragments. Never re-read the file the instructions came from: they are above, verbatim.
+`;
+}
+
 export function buildScreenReviewPrompt(config: {
   mode: 'review' | 'plan';
   instructions: string;
@@ -149,6 +177,7 @@ export function buildScreenReviewPrompt(config: {
   images?: string[];
   routeFile?: string;
   changedRoutes?: string[];
+  baseRef?: string;
 }): string {
   // The heading is explicit and always present: a reviewer checklist that files
   // "no composition contract" as a finding must be able to see that one WAS
@@ -165,7 +194,9 @@ Read this route file and inventory the actions it exposes. There is no screensho
 
 ## Instructions
 ${config.instructions}
-${contextSection}## Contract
+${contextSection}
+${readingSection({ mode: 'plan', changedRoutes: [] })}
+## Contract
 - Cover this route only. Do not wander into other routes or shared components except to name the primitive a control should use.
 - Every control that is visible or reachable on this route gets a row, including ones hidden behind a menu.
 - Your answer is ONLY the schema JSON. No prose before or after it, no markdown fences.`;
@@ -185,7 +216,9 @@ ${imageRefs}
 
 ## Instructions
 ${config.instructions}
-${contextSection}${changedSection}## Contract
+${contextSection}${changedSection}
+${readingSection({ mode: 'review', changedRoutes: changed, baseRef: config.baseRef })}
+## Contract
 - Enumerate what is in each image (every control, label and region) BEFORE judging it. Fill "inventory" first.
 - Set each screen's "route_file" to the repo-relative path of the route or screen source file that image shows, choosing from the changed files above when one of them fits. Use "" only when you genuinely cannot tell — the caller uses this to check that every changed screen has a screenshot.
 - Each finding's "observed" clause describes what the image shows; "rule" cites the rule it breaks.
@@ -449,6 +482,7 @@ export const screenReviewTool: UnifiedTool = {
           images: input.images,
           routeFile: input.routeFile,
           changedRoutes: input.changedRoutes,
+          baseRef: input.baseRef,
         }),
         {
           model: input.model,
