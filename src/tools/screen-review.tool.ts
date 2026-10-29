@@ -13,6 +13,7 @@ import {
 import { bulletList, section, renderUnparsableEnvelope, formatWorkingTreeSection, failWithWorkingTree } from '../utils/agyReport.js';
 import { isWithin, resolveWorkingDirectory, realpathOfExistingPrefix } from '../utils/fileReferences.js';
 import { snapshotWorkingTree, diffWorkingTree, type WorkingTreeDiff } from '../utils/gitStatusGuard.js';
+import { resolveMergeBase } from '../utils/gitCheckout.js';
 import { ERROR_MESSAGES, LIVE_PASS, MODELS, MODEL_CHOICE_DESCRIPTION } from '../constants.js';
 
 const IMAGE_EXTENSIONS = /\.(png|jpe?g)$/i;
@@ -36,6 +37,7 @@ export const screenReviewArgsSchema = z.object({
   images: z.array(z.string()).optional().describe("review mode only: absolute paths to the PNG/JPEG frames to judge. Each must exist."),
   changedRoutes: z.array(z.string()).optional().describe("review mode: repo-relative route/component files the diff touched (from `git diff --name-only`). Every changed screen file (under an `app/` directory) that no image shows makes the review REQUEST_CHANGES; a changed file under `components/` only warns."),
   routeFile: z.string().optional().describe("plan mode only: absolute path to the route/screen source file to inventory. Must exist inside workingDirectory."),
+  baseRef: z.string().min(1).optional().describe("review mode only: the git ref the diff under review is based on, such as 'origin/main'. Resolved in code to its merge base with HEAD (the call fails when it does not resolve); Gemini may then run read-only `git diff <merge-base>...HEAD` and `git show <merge-base>:<path>` to judge severity by the branch's own diff. That needs yolo: true, because headless agy denies the shell otherwise. Without baseRef Gemini runs no git at all."),
   model: z.string().default(MODELS.MEDIUM).describe(`${MODEL_CHOICE_DESCRIPTION} Defaults to '${MODELS.MEDIUM}'.`),
   printTimeout: z.string().default(LIVE_PASS.SCREEN_REVIEW_PRINT_TIMEOUT).describe("agy --print-timeout for the review."),
   yolo: z.boolean().default(false).describe("Pass --dangerously-skip-permissions. Defaults to false because a review only reads. Set it to true when the instructions ask Gemini to read repository files that are not passed as images: it reaches for a shell to do that, headless agy denies the shell, and the call then fails naming the denied action."),
@@ -65,6 +67,9 @@ export const screenReviewArgsSchema = z.object({
 
   if (value.images) {
     ctx.addIssue({ code: 'custom', message: 'images is review mode only', path: ['images'] });
+  }
+  if (value.baseRef !== undefined) {
+    ctx.addIssue({ code: 'custom', message: 'baseRef is review mode only', path: ['baseRef'] });
   }
   const routeFile = value.routeFile;
   if (!routeFile || !path.isAbsolute(routeFile) || !fileExists(routeFile)) {
@@ -142,6 +147,22 @@ const SCHEMA_TEXT = {
 
 // ------------------------------------------------------------------- prompt
 
+function readingSection(config: { mode: 'review' | 'plan'; mergeBase?: string }): string {
+  const routeFile = config.mode === 'plan' ? 'the route file above' : 'the route file each image shows';
+  const git = config.mode === 'review' && config.mergeBase
+    ? `The diff under review is ${config.mergeBase}...HEAD (${config.mergeBase} is the merge base of the caller's base ref and HEAD, resolved for you). Severity follows that diff: you may run read-only \`git diff ${config.mergeBase}...HEAD\`, optionally with \`--name-only\` and \`-- <paths>\`, and \`git show ${config.mergeBase}:<path>\`. No other git command.`
+    : 'Never run git.';
+  return `## Reading code (bounded)
+Read only the code the checklist needs as evidence, and only the lines you need:
+- ${routeFile}, and the components and UI primitives it renders;
+- the changed files listed above or named in the context;
+- the producer lines (serializers, services, hooks) behind a capability or viewer-scoped field the checklist asks about;
+- the rule files and READMEs the instructions cite, and the board or design files they name.
+${git}
+Never run tests, Jest, npm or any package script. Never read node_modules, release notes or changelog fragments. Never re-read the file the instructions came from: they are above, verbatim.
+`;
+}
+
 export function buildScreenReviewPrompt(config: {
   mode: 'review' | 'plan';
   instructions: string;
@@ -149,6 +170,7 @@ export function buildScreenReviewPrompt(config: {
   images?: string[];
   routeFile?: string;
   changedRoutes?: string[];
+  mergeBase?: string;
 }): string {
   // The heading is explicit and always present: a reviewer checklist that files
   // "no composition contract" as a finding must be able to see that one WAS
@@ -165,7 +187,9 @@ Read this route file and inventory the actions it exposes. There is no screensho
 
 ## Instructions
 ${config.instructions}
-${contextSection}## Contract
+${contextSection}
+${readingSection({ mode: 'plan' })}
+## Contract
 - Cover this route only. Do not wander into other routes or shared components except to name the primitive a control should use.
 - Every control that is visible or reachable on this route gets a row, including ones hidden behind a menu.
 - Your answer is ONLY the schema JSON. No prose before or after it, no markdown fences.`;
@@ -185,7 +209,9 @@ ${imageRefs}
 
 ## Instructions
 ${config.instructions}
-${contextSection}${changedSection}## Contract
+${contextSection}${changedSection}
+${readingSection({ mode: 'review', mergeBase: config.mergeBase })}
+## Contract
 - Enumerate what is in each image (every control, label and region) BEFORE judging it. Fill "inventory" first.
 - Set each screen's "route_file" to the repo-relative path of the route or screen source file that image shows, choosing from the changed files above when one of them fits. Use "" only when you genuinely cannot tell — the caller uses this to check that every changed screen has a screenshot.
 - Each finding's "observed" clause describes what the image shows; "rule" cites the rule it breaks.
@@ -432,6 +458,12 @@ export const screenReviewTool: UnifiedTool = {
     // image's parent has to be added explicitly.
     const imageDirs = [...new Set((input.images ?? []).map(image => path.dirname(image)))];
 
+    const mergeBase = input.baseRef === undefined
+      ? undefined
+      : await resolveMergeBase(workingDirectory, input.baseRef).catch((error: Error) => {
+        throw new Error(`${ERROR_MESSAGES.SCREEN_REVIEW_BASE_REF}: '${input.baseRef}'. ${error.message}`);
+      });
+
     const before = input.yolo ? await snapshotWorkingTree(workingDirectory) : null;
 
     const afterWorkingTree = async () => diffWorkingTree(
@@ -449,6 +481,7 @@ export const screenReviewTool: UnifiedTool = {
           images: input.images,
           routeFile: input.routeFile,
           changedRoutes: input.changedRoutes,
+          mergeBase,
         }),
         {
           model: input.model,

@@ -31,3 +31,12 @@ jobs:
     - name: Run tests
       run: npm test
       continue-on-error: true
+    - name: Install headless Chromium
+      if: matrix.node-version == '20.x'
+      run: npx playwright-core install --with-deps chromium-headless-shell
+
+    - name: Check the minified layout snippet and run its tests in headless Chromium
+      if: matrix.node-version == '20.x'
+      run: |
+        node scripts/minify-layout-snippet.mjs --check
+        npm run test:chromium

@@ -29,6 +29,7 @@ export const ERROR_MESSAGES = {
   SCREEN_REVIEW_NO_IMAGES: "review mode requires at least one absolute image path",
   SCREEN_REVIEW_IMAGE_MISSING: "image does not exist",
   SCREEN_REVIEW_ROUTE_FILE: "plan mode requires routeFile: an absolute path to an existing file inside workingDirectory",
+  SCREEN_REVIEW_BASE_REF: "baseRef does not resolve to a merge base with HEAD in workingDirectory",
 } as const;
 
 // Antigravity CLI internal layout, used ONLY for best-effort output recovery.
@@ -76,7 +77,19 @@ export const LIVE_PASS = {
   // Slack between a frame's mtime and our run-start clock.
   FRESHNESS_TOLERANCE_MS: 2000,
   CONVERSATION_LINE_PREFIX: "[GEMINI_CONVERSATION_ID=",
+  LAYOUT_FILE_SUFFIX: ".layout.json",
+  LAYOUT_CHECK_ID: "layout-check/1",
+  LAYOUT_MAX_ENTRIES: 50,
+  LAYOUT_TEXT_CHARS: 80,
 } as const;
+
+/**
+ * Run in the page by browser_evaluate after each web frame, printed verbatim in
+ * the live-pass prompt. Its return value is the `.layout.json` file the layout
+ * validator parses, so the two change together. The readable source is
+ * src/layout-check.snippet.js; its caps and check id must equal LIVE_PASS's.
+ */
+export { LAYOUT_CHECK_SNIPPET } from './layoutCheckSnippet.generated.js';
 
 // MCP Protocol Constants
 export const PROTOCOL = {

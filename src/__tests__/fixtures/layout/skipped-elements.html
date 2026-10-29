@@ -1,0 +1,9 @@
+<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;font:16px/20px sans-serif}button,textarea,input{font:inherit;border:0;padding:0;margin:0}.clip{display:block;width:100px;height:20px;overflow:hidden;white-space:nowrap}.row{position:relative;height:44px}.cover{position:absolute;left:0;top:0;width:120px;height:44px}</style></head><body>
+<div class="clip" data-testid="editable" contenteditable="true">Editable text that runs past the box</div>
+<textarea class="clip" data-testid="notes" style="resize:none">Notes text that runs past the box</textarea>
+<input class="clip" data-testid="name" value="A typed name that runs past the box">
+<select class="clip" data-testid="studio" style="width:60px"><option>A studio name that runs past the box</option><option>Another long studio name</option></select>
+<div data-case="aria-hidden" aria-hidden="true"><div class="clip" data-testid="hidden-label">Hidden text that runs past the box</div><div class="row"><button data-testid="hidden-button" style="width:120px;height:44px">Hidden</button><div class="cover"></div></div></div>
+<div data-case="inert" inert><div class="clip" data-testid="inert-label">Inert text that runs past the box</div><div class="row"><button data-testid="inert-button" style="width:120px;height:44px">Inert</button><div class="cover"></div></div></div>
+<div class="row"><button data-testid="passthrough" style="width:120px;height:44px;pointer-events:none">Passthrough</button><div class="cover"></div></div>
+</body></html>

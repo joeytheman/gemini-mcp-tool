@@ -15,7 +15,10 @@ import {
 import { bulletList, section, renderUnparsableEnvelope, formatWorkingTreeSection, failWithWorkingTree } from '../utils/agyReport.js';
 import { isWithin, resolveWorkingDirectory, realpathOfExistingPrefix } from '../utils/fileReferences.js';
 import { snapshotWorkingTree, diffWorkingTree, type WorkingTreeDiff } from '../utils/gitStatusGuard.js';
-import { ERROR_MESSAGES, LIVE_PASS, MODELS, MODEL_CHOICE_DESCRIPTION } from '../constants.js';
+import { checkArtifactFile } from '../utils/artifactFile.js';
+import { readCheckout, type Checkout } from '../utils/gitCheckout.js';
+import { formatLayoutEntry, layoutFileName, readLayoutCheck, type LayoutCheck } from '../utils/layoutCheck.js';
+import { ERROR_MESSAGES, LAYOUT_CHECK_SNIPPET, LIVE_PASS, MODELS, MODEL_CHOICE_DESCRIPTION } from '../constants.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -35,7 +38,7 @@ export const livePassTargetSchema = z.object({
 export const livePassArgsSchema = z.object({
   targets: z.array(livePassTargetSchema).min(1).describe("Every frame the pass must produce. The verdict is derived from this list: a target that produced no frame fails the pass, whether Gemini skipped it with a reason or never reported it at all — a skip explains missing evidence, it does not excuse it."),
   brief: z.string().refine(value => value.trim().length > 0, ERROR_MESSAGES.LIVE_PASS_NO_BRIEF)
-    .describe("Narrative context: base URL or app id, the served-branch marker, the seed case, navigation hints, and anything Gemini cannot infer from the targets."),
+    .describe("Every fact Gemini needs, because it may not read code to find one: the app's start URL or app id, any link a user arrives by (an invite, email or share link) with where it comes from, the served-branch marker, and per target the user path, the labels or testIDs on it, the seed account and ids, and how long toasts and pending states stay on screen. A target whose fact is missing is skipped with 'brief missing: <fact>'."),
   workingDirectory: z.string().min(1).describe("Absolute path to the worktree under test. Used as the agy cwd and workspace root; must exist and must not be a filesystem root."),
   artifactDir: z.string().optional().describe("Absolute directory for the captured PNGs and manifest.json. Must be strictly inside workingDirectory. Defaults to <workingDirectory>/.live-pass/<timestamp>."),
   driver: z.enum(['playwright', 'maestro']).describe("Which MCP server Gemini drives: 'playwright' for web, 'maestro' for a booted simulator."),
@@ -72,6 +75,7 @@ const frameSchema = z.object({
   viewport: z.string().describe("The requested target's viewport string, copied exactly."),
   verdict: z.enum(['PASS', 'FAIL']),
   observed: z.string().describe("What the image actually shows, in your own words, after opening it."),
+  link_source: z.string().optional().describe("Only when this target began at a link the brief says the user arrives by: the brief's words naming where that link comes from, quoted."),
 });
 
 const findingSchema = z.object({
@@ -150,35 +154,83 @@ export function prescribedFrameNames(
   return byTarget;
 }
 
-function renderTargets(targets: LivePassTarget[], artifactDir: string): string {
+/** The absolute layout-check path for every target, keyed by target, next to its frame. */
+export function prescribedLayoutFiles(targets: LivePassTarget[], artifactDir: string): Map<string, string> {
+  const files = new Map<string, string>();
+  for (const [key, frameName] of prescribedFrameNames(targets)) {
+    files.set(key, path.join(artifactDir, layoutFileName(frameName)));
+  }
+  return files;
+}
+
+function renderTargets(targets: LivePassTarget[], artifactDir: string, driver: 'playwright' | 'maestro'): string {
   const names = prescribedFrameNames(targets);
+  const layoutFiles = prescribedLayoutFiles(targets, artifactDir);
   return targets
-    .map((target, index) =>
-      `${index + 1}. screen: ${target.screen} | state: ${target.state} | viewport: ${target.viewport}\n` +
-      `   expected: ${target.expected}\n` +
-      `   file: ${path.join(artifactDir, names.get(targetKey(target)) as string)}`)
+    .map((target, index) => {
+      const key = targetKey(target);
+      const lines = [
+        `${index + 1}. screen: ${target.screen} | state: ${target.state} | viewport: ${target.viewport}`,
+        `   expected: ${target.expected}`,
+        `   file: ${path.join(artifactDir, names.get(key) as string)}`,
+      ];
+      if (driver === 'playwright') lines.push(`   layout: ${layoutFiles.get(key) as string}`);
+      return lines.join('\n');
+    })
     .join('\n');
 }
 
 const PLAYWRIGHT_PROCEDURE = `Driver: the "${LIVE_PASS.PLAYWRIGHT_MCP_NAME}" MCP server.
+browser_navigate opens only the URLs the "User path" section allows.
 For each target, in order:
-- browser_navigate to the target's route.
-- Wait until the marker named in the brief is present. Never screenshot a page that still shows a spinner or skeleton when a content state was requested.
+- Reach it as the "User path" section says.
+- Locate each control cheaply, in this order: a testID the brief names, as target [data-testid="<testID>"]; then browser_find with its visible label; then browser_snapshot with a target and a small depth scoped to that region. Never take a full-page snapshot just to look around, and never copy a snapshot or accessibility tree into your answer.
+- Native dialogs such as window.confirm and window.alert block the page: accept or dismiss each with browser_handle_dialog right after the click that opened it.
+- Wait until the marker the brief names for that state is present. Never screenshot a page that still shows a spinner or skeleton when a content state was requested.
 - browser_resize to the target's viewport.
 - browser_take_screenshot with filename set to the exact absolute path printed as "file:" for that target below. Never invent a filename, never reuse another target's file, and never use fullPage.
 - For a scrolling screen: browser_resize to (width, 4000), then browser_evaluate this snippet to measure the real content height, then browser_resize to (width, measured) and shoot:
   () => { const skip = (el) => el.closest('[aria-hidden="true"]') || el.closest('[role="tab"]'); let bottom = 0; for (const el of document.querySelectorAll('body *')) { if (skip(el)) continue; const hasText = Array.from(el.childNodes).some(n => n.nodeType === 3 && n.textContent.trim()); if (!hasText) continue; bottom = Math.max(bottom, el.getBoundingClientRect().bottom + window.scrollY); } return Math.ceil(bottom + 24); }
+- Right after each screenshot, run the layout check: browser_evaluate with function set to the layout snippet below, copied verbatim, and filename set to the exact absolute path printed as "layout:" for that target. Do not open that file or report on it: the caller reads it.
 - Capture centred/terminal states and sheets at 390x844 and again at 320x568 when the targets ask for both.
-- browser_snapshot only to locate an element. Never copy a snapshot or accessibility tree into your answer.
-- Scroll a virtualized list to its end before asserting that something is absent.`;
+- Scroll a virtualized list to its end before asserting that something is absent.
+- browser_evaluate runs only the two snippets printed here. Never use it to click, type, navigate, or set storage, cookies or app state.
+
+Layout snippet:
+${LAYOUT_CHECK_SNIPPET}`;
+
+const PLAYWRIGHT_CHEAT_SHEET = `## Tool cheat sheet (the installed parameters: never read tool schemas or Playwright source)
+"target" is a ref from browser_find or browser_snapshot (such as e12) or a unique selector such as [data-testid="save"].
+- browser_navigate {url}
+- browser_click {target, element?, doubleClick?, button?, modifiers?}
+- browser_type {target, text, submit?, slowly?}: submit presses Enter afterwards.
+- browser_fill_form {fields: [{target, name, type: textbox | checkbox | radio | combobox | slider, value}]}: a checkbox value is "true" or "false"; a combobox value is the option's text.
+- browser_select_option {target, values: [...]}
+- browser_press_key {key}: such as Enter, Escape, Tab, ArrowDown.
+- browser_handle_dialog {accept, promptText?}
+- browser_wait_for {text? | textGone? | time?}: time is in seconds, at most 30.
+- browser_find {text | regex}: searches the accessibility snapshot and returns the matching nodes with their refs.
+- browser_snapshot {target?, depth?, boxes?}
+- browser_resize {width, height}
+- browser_take_screenshot {filename, fullPage?, scale?}: filename is absolute.
+- browser_evaluate {function, target?, filename?}: with filename, the return value is written there as JSON instead of returned to you.`;
 
 const MAESTRO_PROCEDURE = `Driver: the "${LIVE_PASS.MAESTRO_MCP_NAME}" MCP server.
 For each target, in order:
-- list_devices first and use the returned udid for every later call. Never guess a device.
-- run an inline YAML flow to reach the state, then inspect_screen to confirm it settled.
+- list_devices first and use the returned device_id for every later call. Never guess a device.
+- Reach each state as the "User path" section says, with inline YAML flows: launchApp only to open the app at the start, then tapOn and inputText; openLink only for a link arrival that section allows.
+- Locate controls by the testID the brief names (id:), then by the full visible text inspect_screen reports (text:).
+- inspect_screen to confirm the state settled.
 - Never use take_screenshot for evidence: it returns an image inline and saves nothing.
-- After each settled state, shell out: xcrun simctl io <udid> screenshot <the exact absolute path printed as "file:" for that target below>. Never invent a filename and never reuse another target's file.
+- After each settled state, shell out: xcrun simctl io <device_id, the simulator UDID> screenshot <the exact absolute path printed as "file:" for that target below>. Never invent a filename and never reuse another target's file.
 - Only one driver may own a simulator at a time. If the device is busy, record the target as skipped with that reason rather than fighting for it — the pass then FAILS for missing evidence, which is the honest outcome. Never fabricate or reuse a frame.`;
+
+const MAESTRO_CHEAT_SHEET = `## Tool cheat sheet (the installed parameters: never read tool schemas)
+- list_devices {}: returns the device_id every other call needs.
+- run {device_id, yaml, env?}: an inline flow, such as "- tapOn:\\n    id: save" or "- inputText: hello".
+- inspect_screen {device_id}: the view hierarchy as compact JSON with abbreviated keys (b bounds, txt text, rid resource id, a11y accessibility label). Selectors take id:, text:, index:, below:, above:, leftOf:, rightOf: — never the abbreviated keys. text: is a full-string, case-insensitive regex: copy txt verbatim or end it with ".*".
+- take_screenshot {device_id}: returns an image inline; never evidence.
+- cheat_sheet {}: Maestro flow syntax, only when a command above is not enough.`;
 
 const RESUMED_DELTA_SECTION = `## Delta reporting (this conversation has an earlier pass)
 Compare against the frames and findings you reported earlier in this conversation.
@@ -188,16 +240,24 @@ Compare against the frames and findings you reported earlier in this conversatio
 - A new defect goes in "findings".
 Never put an improvement in "findings" or "regressions". The browser or simulator starts fresh: walk every target again, do not answer from memory.`;
 
+function renderCheckout(checkout: Checkout | null): string {
+  if (!checkout) return '- Checkout under test: not a git checkout with a commit, so rely on the brief\'s marker alone.';
+  const branch = checkout.branch ?? 'a detached HEAD';
+  return `- Checkout under test: ${branch} at ${checkout.head}. Read for you, so never run git.`;
+}
+
 export function buildLivePassPrompt(config: {
   brief: string;
   driver: 'playwright' | 'maestro';
   targets: LivePassTarget[];
   workingDirectory: string;
   artifactDir: string;
+  checkout: Checkout | null;
   resumed: boolean;
 }): string {
-  const { brief, driver, targets, workingDirectory, artifactDir, resumed } = config;
+  const { brief, driver, targets, workingDirectory, artifactDir, checkout, resumed } = config;
   const procedure = driver === 'maestro' ? MAESTRO_PROCEDURE : PLAYWRIGHT_PROCEDURE;
+  const cheatSheet = driver === 'maestro' ? MAESTRO_CHEAT_SHEET : PLAYWRIGHT_CHEAT_SHEET;
 
   return `# Live UI pass
 
@@ -206,19 +266,38 @@ Your answer is ONLY the schema JSON. No prose before or after it, no markdown fe
 
 ## Environment
 - Artifact directory (write here, and only here): ${artifactDir}
-- Working directory (read-only): ${workingDirectory}
-- Never read, list or glob outside those two directories.
-- Never edit product code, never create or modify files outside the artifact directory, and never run a git command that changes state (no add, commit, checkout, stash, restore, clean).
+- Working directory: ${workingDirectory}. It is only where you run: read, list and glob nothing outside the artifact directory.
+${renderCheckout(checkout)}
+- Never edit product code, never create or modify files outside the artifact directory, and never run a git command.
+
+## Scope
+Everything you need is in this prompt, the brief, and what the app shows you.
+- Never read product source, tests, docs, config, tool schemas or tool source. Never query a database. Never run a shell command except the capture command the procedure names and removing a stale file at a target's own "file:" path.
+- Never read code to work out why something failed. Report what you saw.
+
+## User path
+- The pass opens the app once, at its start URL (or by launching it on a device), as the brief names it.
+- A target may begin at a link of its own only when the brief says the user arrives by that link, such as an invite, email or share link, and names where the link comes from. Open it as following that link would, and quote the brief's words naming the source in that frame's "link_source".
+- Every other target is reached by taps from the previous screen: sign in through the sign-in form, tap through the navigation, and fill and submit forms. Any other URL or deep link in the brief is context, never a navigation target.
+- A reload, only where the brief makes one part of the path, opens the URL the page is already on.
+- No script that clicks, navigates, or sets storage, cookies or app state for you.
+
+## Dead ends
+- When the path to a target breaks (a control is missing, a tap does nothing, a screen errors), stop that target and add it to "skipped" with the step where the path broke, such as "step 3: tapped Save, nothing happened". A dead end a user would hit is also a finding.
+- When the brief lacks a fact you need (a label or testID, a seed account or id, which tab), add the target to "skipped" with "brief missing: <the fact>". Never search the code for it.
 
 ## Procedure
 ${procedure}
 
+${cheatSheet}
+
 ## Targets
 Capture exactly these, use these exact screen / state / viewport strings in your frames, and save each one to its own "file:" path — copied verbatim into that frame's "file". One file per target: a file that answers two targets is treated as no evidence at all.
-${renderTargets(targets, artifactDir)}
+${renderTargets(targets, artifactDir, driver)}
 
 ## Served-branch check first
-Before any capture, confirm the running app is the build under test using the marker in the brief. If you cannot confirm it, stop, set verdict BLOCKED, and explain in served_branch_check. Never report on an app you cannot identify.
+Before any capture, confirm the running app shows the served-branch marker the brief describes. If it does not, or you cannot find it, stop, set verdict BLOCKED, and explain in served_branch_check. Never report on an app you cannot identify.
+The checkout above is context. Set BLOCKED over it only when the marker names a branch or commit that contradicts it. A detached HEAD never contradicts a branch name, and a short commit hash matches the full one it begins.
 
 ## Evidence discipline
 - Open every PNG you saved and describe it in "observed". "observed" is what the image shows, not what you expected it to show.
@@ -270,19 +349,6 @@ export interface FramesValidation {
  */
 function frameAbsolutePath(file: string, artifactDir: string): string {
   return realpathOfExistingPrefix(path.isAbsolute(file) ? file : path.resolve(artifactDir, file));
-}
-
-function checkFrameFile(absFile: string, artifactDir: string, runStartMs: number): FrameStatus {
-  if (!isWithin(artifactDir, absFile)) return 'OUTSIDE';
-  try {
-    const stat = fs.statSync(absFile);
-    if (!stat.isFile()) return 'MISSING';
-    if (stat.size === 0) return 'EMPTY';
-    if (stat.mtimeMs < runStartMs - LIVE_PASS.FRESHNESS_TOLERANCE_MS) return 'STALE';
-    return 'OK';
-  } catch {
-    return 'MISSING';
-  }
 }
 
 function readManifestProblems(artifactDir: string, frameCount: number, runStartMs: number): string[] {
@@ -345,7 +411,7 @@ export function validateFrames(
     // targets — no evidence for either, however good the picture is.
     const status: FrameStatus = claimedBy.has(absFile)
       ? 'DUPLICATE'
-      : checkFrameFile(absFile, artifactDir, runStartMs);
+      : checkArtifactFile(absFile, artifactDir, runStartMs);
     claimedBy.add(absFile);
 
     const misnamed = Boolean(expectedName) && path.basename(absFile) !== expectedName;
@@ -510,6 +576,56 @@ export async function runPublishCommand(
 
 // ------------------------------------------------------------------ report
 
+export function formatTurnsPerFrame(numTurns: number | undefined, frameCount: number): string {
+  if (numTurns === undefined) return 'Turns per frame: ? (agy reported no turn count)';
+  if (frameCount === 0) return `Turns per frame: n/a (${numTurns} turns, no frames)`;
+  const perFrame = Math.round((numTurns / frameCount) * 10) / 10;
+  return `Turns per frame: ${perFrame} (${numTurns} turns / ${frameCount} frames)`;
+}
+
+export interface TargetLayoutCheck {
+  target: LivePassTarget;
+  check: LayoutCheck;
+}
+
+function viewportWidth(viewport: string): number | undefined {
+  const match = /^\s*(\d+)\s*x\s*\d+\s*$/i.exec(viewport);
+  return match ? Number(match[1]) : undefined;
+}
+
+/** Each web target's layout file, read from its prescribed path. Never throws. */
+export function readLayoutChecks(
+  targets: LivePassTarget[],
+  artifactDir: string,
+  runStartMs: number
+): TargetLayoutCheck[] {
+  const files = prescribedLayoutFiles(targets, artifactDir);
+  return targets.map(target => ({
+    target,
+    check: readLayoutCheck(files.get(targetKey(target)) as string, artifactDir, runStartMs, viewportWidth(target.viewport)),
+  }));
+}
+
+export function formatLayoutSection(checks: TargetLayoutCheck[]): string {
+  const lines = checks.map(({ target, check }) => {
+    const label = `${target.screen} / ${target.state} / ${target.viewport}`;
+    if (!check.report) return `- ${label}: not run (${check.status}: ${check.file} ${check.problem})`;
+
+    const { entries, clamped, found } = check.report;
+    if (entries.length === 0 && clamped.length === 0) return `- ${label}: clean`;
+    const listed = found > entries.length ? ` (${found} found, first ${entries.length} listed)` : '';
+    const polluted = entries.some(entry => entry.kind === 'dev-overlay')
+      ? ' (a framework dev overlay was on screen: this frame is polluted)'
+      : '';
+    return [
+      `- ${label}: ${found} ${found === 1 ? 'entry' : 'entries'}${listed}${polluted}`,
+      ...entries.map(entry => `  - ${formatLayoutEntry(entry)}`),
+      ...clamped.map(entry => `  - capped (line clamp / ellipsis): ${formatLayoutEntry(entry)}`),
+    ].join('\n');
+  });
+  return section('Layout checks (measured in the page)', lines.join('\n'));
+}
+
 export function formatLivePassReport(input: {
   envelope: AgyJsonEnvelope;
   result: LivePassResult;
@@ -522,6 +638,8 @@ export function formatLivePassReport(input: {
   deniedActions: string;
   workingTree: WorkingTreeDiff;
   publish: PublishResult;
+  /** Web passes only. Reported for the caller to judge; never an input to the verdict. */
+  layoutChecks?: TargetLayoutCheck[];
 }): string {
   const { envelope, result, decision, validation, coverage, driver, model, artifactDir } = input;
   const statusById = new Map(validation.checks.map(check => [check.file, check.status]));
@@ -535,14 +653,16 @@ export function formatLivePassReport(input: {
   parts.push(headline);
   parts.push(`driver: ${driver} · model: ${model} · artifacts: ${artifactDir}`);
   parts.push(formatAgyUsageLine(envelope));
+  parts.push(formatTurnsPerFrame(envelope.num_turns, result.frames.length));
   parts.push(section('Why', bulletList(decision.reasons)));
   parts.push(section('Served-branch check', result.served_branch_check || '- not reported'));
   parts.push(section('Summary', result.summary || '- not reported'));
 
   parts.push(section('Frames', bulletList(result.frames.map(frame => {
     const abs = frameAbsolutePath(frame.file, artifactDir);
+    const arrival = frame.link_source ? `\n  arrived by link: ${frame.link_source}` : '';
     return `${frame.verdict} [${statusById.get(abs) ?? 'UNKNOWN'}] ${frame.screen} / ${frame.state} / ${frame.viewport}\n` +
-      `  file: ${abs}\n  expected: ${frame.expected}\n  observed: ${frame.observed}`;
+      `  file: ${abs}${arrival}\n  expected: ${frame.expected}\n  observed: ${frame.observed}`;
   }))));
 
   const renderFindings = (items: LivePassResult['findings']) => bulletList(items.map(item =>
@@ -567,6 +687,8 @@ export function formatLivePassReport(input: {
     validationLines.push(`frames matching no requested target: ${coverage.extraFrames.join(', ')}`);
   }
   parts.push(section('Validation', bulletList(validationLines)));
+
+  if (input.layoutChecks) parts.push(formatLayoutSection(input.layoutChecks));
 
   if (input.deniedActions) {
     parts.push(section('Denied actions', `- ${input.deniedActions}`));
@@ -627,6 +749,7 @@ export const livePassTool: UnifiedTool = {
 
     const runStartMs = Date.now();
     const before = await snapshotWorkingTree(workingDirectory);
+    const checkout = await readCheckout(workingDirectory);
 
     const afterWorkingTree = async () => diffWorkingTree(
       before,
@@ -643,6 +766,7 @@ export const livePassTool: UnifiedTool = {
           targets: input.targets,
           workingDirectory,
           artifactDir,
+          checkout,
           resumed: Boolean(input.conversationId),
         }),
         {
@@ -703,6 +827,9 @@ export const livePassTool: UnifiedTool = {
       deniedActions,
       workingTree,
       publish,
+      layoutChecks: input.driver === 'playwright'
+        ? readLayoutChecks(input.targets, artifactDir, runStartMs)
+        : undefined,
     });
   },
 };
