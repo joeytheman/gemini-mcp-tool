@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+## [2.3.0]
+- `live-pass` spends fewer Gemini turns. The prompt now carries the branch and HEAD of `workingDirectory` (read in code), a parameter cheat sheet for the Playwright or Maestro tools the procedure uses, and the rule for native dialogs (`browser_handle_dialog` right after the click). Gemini may not read product source, tests, docs, tool schemas or the database, or run git or other shell commands beyond the capture command; the brief carries every fact it needs.
+- `live-pass` follows the user path: sign-in form, navigation taps, form submits; no URL jumps or `browser_evaluate` shortcuts. Controls are located by testID, then `browser_find`, then a scoped `browser_snapshot`. A broken path skips the target with the step where it broke, and a missing brief fact skips it with `brief missing: <fact>`.
+- `live-pass` (web) runs a layout check after each frame and writes `<frame>.layout.json` next to it: horizontal page scroll, spilling and clipped text, covered controls, and controls cut off at the screen edge, with intentional line clamps listed apart. The report adds a "Layout checks (measured in the page)" section; it never affects the verdict.
+- `live-pass` reports turns per frame under the usage line.
+- `screen-review` bounds Gemini's reads to the evidence its checklist needs, and bans running tests or npm and reading `node_modules` or release notes. New `baseRef` (review mode) allows read-only `git diff`/`git show` against that base; without it Gemini runs no git.
+- Package and MCP server versions synchronized at `2.3.0`.
+
 ## [2.2.0]
 - Default model for `ask-gemini` and `brainstorm` changed to `Gemini 4 Argon (High)`; `live-pass` and `screen-review` continue to default to `Gemini 3.8 Flash (Medium)`.
 - Added Gemini 4 Argon Low, Medium, and High tiers to the advertised model choices and updated setup guidance for account-dependent availability. Explicit model overrides remain supported, with no automatic fallback.

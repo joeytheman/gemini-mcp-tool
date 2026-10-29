@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
+import { execFileSync } from 'child_process';
 
 vi.mock('../utils/logger.js', () => ({
   Logger: { debug: vi.fn(), warn: vi.fn(), error: vi.fn(), log: vi.fn(), toolInvocation: vi.fn() },
@@ -32,6 +33,10 @@ import {
   buildLivePassPrompt,
   frameFileName,
   prescribedFrameNames,
+  prescribedLayoutFiles,
+  formatTurnsPerFrame,
+  formatLayoutSection,
+  readLayoutChecks,
   validateFrames,
   checkCoverage,
   deriveVerdict,
@@ -39,7 +44,8 @@ import {
   type LivePassResult,
   type LivePassTarget,
 } from '../tools/live-pass.tool.js';
-import { ERROR_MESSAGES, LIVE_PASS, MODELS } from '../constants.js';
+import { ERROR_MESSAGES, LAYOUT_CHECK_SNIPPET, LIVE_PASS, MODELS } from '../constants.js';
+import { readLayoutCheck, type LayoutReport } from '../utils/layoutCheck.js';
 import { makeTempDir, cleanupTempDirs } from './utils/test-helpers.js';
 
 // ------------------------------------------------------------------ helpers
@@ -96,6 +102,31 @@ function writeManifest(artifactDir: string, frames: unknown[]): void {
     path.join(artifactDir, LIVE_PASS.MANIFEST_FILE),
     JSON.stringify({ run_started: new Date().toISOString(), driver: 'playwright', frames, skipped: [] })
   );
+}
+
+function makeLayoutReport(overrides: Partial<LayoutReport> = {}): LayoutReport {
+  return {
+    check: LIVE_PASS.LAYOUT_CHECK_ID,
+    viewport: { width: 390, height: 844 },
+    found: 0,
+    entries: [],
+    clamped: [],
+    ...overrides,
+  };
+}
+
+const SPILL_ENTRY = {
+  kind: 'text-spill' as const,
+  text: 'Uploaded to the studio wins wall',
+  testID: 'label',
+  rect: { x: 0, y: 0, width: 320, height: 20 },
+};
+
+function writeLayoutFile(artifactDir: string, frameName: string, contents: unknown): string {
+  fs.mkdirSync(artifactDir, { recursive: true });
+  const file = path.join(artifactDir, frameName.replace(/\.png$/, LIVE_PASS.LAYOUT_FILE_SUFFIX));
+  fs.writeFileSync(file, typeof contents === 'string' ? contents : JSON.stringify(contents, null, 2));
+  return file;
 }
 
 function envelope(structured: unknown, overrides: Record<string, unknown> = {}) {
@@ -217,6 +248,7 @@ describe('buildLivePassPrompt', () => {
     targets: [HOME_TARGET, { ...HOME_TARGET, state: 'offline', expected: 'offline notice plus Retry' }],
     workingDirectory: '/work/tree',
     artifactDir: '/work/tree/.live-pass/run1',
+    checkout: { branch: 'feat/orders', head: '0123456789abcdef0123456789abcdef01234567' },
   };
 
   it('renders the targets as a numbered list with their expected state', () => {
@@ -274,6 +306,287 @@ describe('buildLivePassPrompt', () => {
     expect(fresh).toContain('This is a fresh pass');
     expect(resumed).toContain('Delta reporting');
     expect(resumed).toContain('Never put an improvement in "findings" or "regressions"');
+  });
+});
+
+describe('buildLivePassPrompt: context Gemini used to dig for', () => {
+  const base = {
+    brief: 'Entry URL http://localhost:8123; marker: footer BRANCH: smoke',
+    targets: [HOME_TARGET, { ...HOME_TARGET, state: 'offline', expected: 'offline notice plus Retry' }],
+    workingDirectory: '/work/tree',
+    artifactDir: '/work/tree/.live-pass/run1',
+    checkout: { branch: 'feat/orders', head: '0123456789abcdef0123456789abcdef01234567' },
+    resumed: false,
+  };
+
+  it('prints the branch and HEAD read in code, and forbids running git to find them', () => {
+    const prompt = buildLivePassPrompt({ ...base, driver: 'playwright' });
+
+    expect(prompt).toContain('- Checkout under test: feat/orders at 0123456789abcdef0123456789abcdef01234567. Read for you, so never run git.');
+    expect(prompt).toContain('using the marker in the brief, compared with the checkout above');
+  });
+
+  it('names a detached HEAD instead of a branch', () => {
+    const prompt = buildLivePassPrompt({ ...base, driver: 'playwright', checkout: { branch: null, head: 'abc1234' } });
+
+    expect(prompt).toContain('- Checkout under test: a detached HEAD at abc1234.');
+  });
+
+  it('falls back to the brief marker when the working directory is not a git checkout', () => {
+    const prompt = buildLivePassPrompt({ ...base, driver: 'playwright', checkout: null });
+
+    expect(prompt).toContain("- Checkout under test: not a git checkout with a commit, so rely on the brief's marker alone.");
+  });
+
+  it('carries a parameter cheat sheet for every playwright tool the procedure uses', () => {
+    const prompt = buildLivePassPrompt({ ...base, driver: 'playwright' });
+
+    expect(prompt).toContain('## Tool cheat sheet (the installed parameters: never read tool schemas or Playwright source)');
+    for (const line of [
+      '- browser_navigate {url}',
+      '- browser_click {target, element?, doubleClick?, button?, modifiers?}',
+      '- browser_type {target, text, submit?, slowly?}',
+      '- browser_fill_form {fields: [{target, name, type: textbox | checkbox | radio | combobox | slider, value}]}',
+      '- browser_select_option {target, values: [...]}',
+      '- browser_press_key {key}',
+      '- browser_handle_dialog {accept, promptText?}',
+      '- browser_wait_for {text? | textGone? | time?}',
+      '- browser_find {text | regex}',
+      '- browser_snapshot {target?, depth?, boxes?}',
+      '- browser_resize {width, height}',
+      '- browser_take_screenshot {filename, fullPage?, scale?}',
+      '- browser_evaluate {function, target?, filename?}',
+    ]) {
+      expect(prompt).toContain(line);
+    }
+    expect(prompt).toContain('a unique selector such as [data-testid="save"]');
+    expect(prompt).not.toContain('- inspect_screen {device_id}');
+  });
+
+  it('carries the maestro tool cheat sheet for the maestro driver instead', () => {
+    const prompt = buildLivePassPrompt({ ...base, driver: 'maestro' });
+
+    for (const line of [
+      '- list_devices {}',
+      '- run {device_id, yaml, env?}',
+      '- inspect_screen {device_id}',
+      '- take_screenshot {device_id}: returns an image inline; never evidence.',
+      '- cheat_sheet {}',
+    ]) {
+      expect(prompt).toContain(line);
+    }
+    expect(prompt).not.toContain('- browser_click {');
+  });
+
+  it('tells a web pass to answer native dialogs right after the triggering click', () => {
+    const prompt = buildLivePassPrompt({ ...base, driver: 'playwright' });
+
+    expect(prompt).toContain('Native dialogs such as window.confirm and window.alert block the page: accept or dismiss each with browser_handle_dialog right after the click that opened it.');
+  });
+
+  it.each(['playwright', 'maestro'] as const)('forbids code, database and git reads for the %s driver', (driver) => {
+    const prompt = buildLivePassPrompt({ ...base, driver });
+
+    expect(prompt).toContain('Never read product source, tests, docs, config, tool schemas or tool source. Never query a database.');
+    expect(prompt).toContain("Never run a shell command except the capture command the procedure names and removing a stale file at a target's own \"file:\" path.");
+    expect(prompt).toContain('Never read code to work out why something failed. Report what you saw.');
+    expect(prompt).toContain('never run a git command.');
+    expect(prompt).toContain('It is only where you run: read, list and glob nothing outside the artifact directory.');
+    expect(prompt).not.toContain('Working directory (read-only)');
+  });
+
+  it.each(['playwright', 'maestro'] as const)('makes the %s pass reach every target the way a user would', (driver) => {
+    const prompt = buildLivePassPrompt({ ...base, driver });
+
+    expect(prompt).toContain('Reach every target the way a user would: sign in through the sign-in form, tap through the navigation, and fill and submit forms.');
+    expect(prompt).toContain('No shortcut past a user step: no jump to a deeper URL or deep link, and no script that clicks, navigates, or sets storage, cookies or app state for you.');
+  });
+
+  it('navigates a web pass only to the entry URL and keeps browser_evaluate to the printed snippets', () => {
+    const prompt = buildLivePassPrompt({ ...base, driver: 'playwright' });
+
+    expect(prompt).not.toContain("browser_navigate to the target's route");
+    expect(prompt).toContain('Start with browser_navigate to the entry URL the brief names. Never browser_navigate again, except to an entry URL the brief names or a reload the brief makes part of the path.');
+    expect(prompt).toContain('browser_evaluate runs only the two snippets printed here. Never use it to click, type, navigate, or set storage, cookies or app state.');
+  });
+
+  it('keeps a maestro pass off deep links', () => {
+    const prompt = buildLivePassPrompt({ ...base, driver: 'maestro' });
+
+    expect(prompt).toContain('Never use openLink to skip a user step.');
+  });
+
+  it('locates web controls by testID, then browser_find, then a scoped snapshot', () => {
+    const prompt = buildLivePassPrompt({ ...base, driver: 'playwright' });
+
+    expect(prompt).toContain('Locate each control cheaply, in this order: a testID the brief names, as target [data-testid="<testID>"]; then browser_find with its visible label; then browser_snapshot with a target and a small depth scoped to that region. Never take a full-page snapshot just to look around');
+  });
+
+  it.each(['playwright', 'maestro'] as const)('reports a %s dead end with the broken step, and a missing fact as skipped', (driver) => {
+    const prompt = buildLivePassPrompt({ ...base, driver });
+
+    expect(prompt).toContain('add it to "skipped" with the step where the path broke, such as "step 3: tapped Save, nothing happened". A dead end a user would hit is also a finding.');
+    expect(prompt).toContain('add the target to "skipped" with "brief missing: <the fact>". Never search the code for it.');
+  });
+
+  it('prints the layout snippet verbatim and one prescribed layout file per web target', () => {
+    const prompt = buildLivePassPrompt({ ...base, driver: 'playwright' });
+
+    expect(prompt).toContain(`Layout snippet:\n${LAYOUT_CHECK_SNIPPET}`);
+    expect(prompt).toContain('   layout: /work/tree/.live-pass/run1/home-default-390x844.layout.json');
+    expect(prompt).toContain('   layout: /work/tree/.live-pass/run1/home-offline-390x844.layout.json');
+    expect(prompt).toContain('filename set to the exact absolute path printed as "layout:" for that target. Do not open that file or report on it');
+  });
+
+  it('asks a maestro pass for no layout check', () => {
+    const prompt = buildLivePassPrompt({ ...base, driver: 'maestro' });
+
+    expect(prompt).not.toContain('layout:');
+    expect(prompt).not.toContain(LAYOUT_CHECK_SNIPPET);
+  });
+});
+
+describe('prescribedLayoutFiles', () => {
+  it('puts each layout file next to its frame, sharing the frame stem and its collision suffix', () => {
+    const targets = [
+      { ...HOME_TARGET, screen: 'settings/profile' },
+      { ...HOME_TARGET, screen: 'settings-profile' },
+    ];
+
+    const files = prescribedLayoutFiles(targets, '/art');
+
+    expect([...files.values()]).toEqual([
+      '/art/settings-profile-default-390x844.layout.json',
+      '/art/settings-profile-default-390x844-2.layout.json',
+    ]);
+  });
+});
+
+describe('formatTurnsPerFrame', () => {
+  it('divides the turn count by the reported frames, to one decimal', () => {
+    expect(formatTurnsPerFrame(81, 6)).toBe('Turns per frame: 13.5 (81 turns / 6 frames)');
+  });
+
+  it('reports n/a when no frame was reported', () => {
+    expect(formatTurnsPerFrame(12, 0)).toBe('Turns per frame: n/a (12 turns, no frames)');
+  });
+
+  it('reports ? when agy gave no turn count', () => {
+    expect(formatTurnsPerFrame(undefined, 3)).toBe('Turns per frame: ? (agy reported no turn count)');
+  });
+});
+
+// ------------------------------------------------------------ layout checks
+
+describe('readLayoutCheck', () => {
+  const frameName = frameFileName(HOME_TARGET);
+
+  it('accepts a fresh, schema-valid file inside the artifact directory', () => {
+    const artifactDir = path.join(makeWorkDir(), 'frames');
+    const report = makeLayoutReport({ found: 1, entries: [SPILL_ENTRY] });
+    const file = writeLayoutFile(artifactDir, frameName, report);
+
+    const check = readLayoutCheck(file, artifactDir, Date.now());
+
+    expect(check).toEqual({ file, status: 'OK', report });
+  });
+
+  it('reports a file that was never written as MISSING', () => {
+    const artifactDir = path.join(makeWorkDir(), 'frames');
+    fs.mkdirSync(artifactDir, { recursive: true });
+    const file = path.join(artifactDir, 'home-default-390x844.layout.json');
+
+    expect(readLayoutCheck(file, artifactDir, Date.now())).toEqual({ file, status: 'MISSING', problem: 'not written' });
+  });
+
+  it('reports a file left over from an earlier run as STALE', () => {
+    const artifactDir = path.join(makeWorkDir(), 'frames');
+    const file = writeLayoutFile(artifactDir, frameName, makeLayoutReport());
+    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    fs.utimesSync(file, yesterday, yesterday);
+
+    expect(readLayoutCheck(file, artifactDir, Date.now())).toEqual({ file, status: 'STALE', problem: 'predates this run' });
+  });
+
+  it('accepts a file written within the freshness tolerance before the run clock', () => {
+    const artifactDir = path.join(makeWorkDir(), 'frames');
+    const file = writeLayoutFile(artifactDir, frameName, makeLayoutReport());
+    const runStartMs = fs.statSync(file).mtimeMs + LIVE_PASS.FRESHNESS_TOLERANCE_MS - 1;
+
+    expect(readLayoutCheck(file, artifactDir, runStartMs).status).toBe('OK');
+  });
+
+  it('reports a prescribed path symlinked out of the artifact directory as OUTSIDE', () => {
+    const workDir = makeWorkDir();
+    const artifactDir = path.join(workDir, 'frames');
+    fs.mkdirSync(artifactDir, { recursive: true });
+    const outside = writeLayoutFile(makeWorkDir(), frameName, makeLayoutReport());
+    const prescribed = path.join(artifactDir, path.basename(outside));
+    fs.symlinkSync(outside, prescribed);
+
+    expect(readLayoutCheck(prescribed, artifactDir, Date.now())).toEqual({
+      file: outside,
+      status: 'OUTSIDE',
+      problem: 'resolves outside the artifact directory',
+    });
+  });
+
+  it('reports a file that is not JSON as MALFORMED', () => {
+    const artifactDir = path.join(makeWorkDir(), 'frames');
+    const file = writeLayoutFile(artifactDir, frameName, 'undefined');
+
+    expect(readLayoutCheck(file, artifactDir, Date.now())).toEqual({ file, status: 'MALFORMED', problem: 'not valid JSON' });
+  });
+
+  it.each([
+    ['another check id', { ...makeLayoutReport(), check: 'layout-check/0' }, 'check'],
+    ['an unknown kind', makeLayoutReport({ found: 1, entries: [{ ...SPILL_ENTRY, kind: 'ugly' as any }] }), 'entries.0.kind'],
+    ['text longer than 80 characters', makeLayoutReport({ found: 1, entries: [{ ...SPILL_ENTRY, text: 'x'.repeat(81) }] }), 'entries.0.text'],
+    ['more than 50 entries', makeLayoutReport({ found: 51, entries: Array(51).fill(SPILL_ENTRY) }), 'entries'],
+    ['a defect kind in the clamped list', makeLayoutReport({ clamped: [SPILL_ENTRY as any] }), 'clamped.0.kind'],
+  ])('reports a result with %s as MALFORMED', (_label, contents, issuePath) => {
+    const artifactDir = path.join(makeWorkDir(), 'frames');
+    const file = writeLayoutFile(artifactDir, frameName, contents);
+
+    const check = readLayoutCheck(file, artifactDir, Date.now());
+
+    expect(check.status).toBe('MALFORMED');
+    expect(check.report).toBeUndefined();
+    expect(check.problem).toContain(`not a ${LIVE_PASS.LAYOUT_CHECK_ID} result (${issuePath}:`);
+  });
+});
+
+describe('formatLayoutSection', () => {
+  it('lists each frame\'s entries, its intentional caps apart, a clean frame, and a frame never run', () => {
+    const artifactDir = path.join(makeWorkDir(), 'frames');
+    const offline = { ...HOME_TARGET, state: 'offline' };
+    const empty = { ...HOME_TARGET, state: 'empty' };
+    writeLayoutFile(artifactDir, frameFileName(HOME_TARGET), makeLayoutReport({
+      found: 1,
+      entries: [SPILL_ENTRY],
+      clamped: [{ kind: 'text-clamped', text: 'Costume checklist', testID: null, rect: { x: 0, y: 40, width: 200, height: 40 } }],
+    }));
+    writeLayoutFile(artifactDir, frameFileName(offline), makeLayoutReport());
+
+    const section = formatLayoutSection(readLayoutChecks([HOME_TARGET, offline, empty], artifactDir, Date.now()));
+
+    expect(section).toBe([
+      '## Layout checks (measured in the page)',
+      '- home / default / 390x844: 1 entry',
+      '  - text-spill "Uploaded to the studio wins wall" testID=label at 0,0 320x20',
+      '  - capped on purpose: text-clamped "Costume checklist" at 0,40 200x40',
+      '- home / offline / 390x844: clean',
+      `- home / empty / 390x844: not run (MISSING: ${path.join(artifactDir, 'home-empty-390x844.layout.json')} not written)`,
+    ].join('\n'));
+  });
+
+  it('says when the snippet found more entries than it listed', () => {
+    const artifactDir = path.join(makeWorkDir(), 'frames');
+    writeLayoutFile(artifactDir, frameFileName(HOME_TARGET), makeLayoutReport({ found: 73, entries: [SPILL_ENTRY] }));
+
+    const section = formatLayoutSection(readLayoutChecks([HOME_TARGET], artifactDir, Date.now()));
+
+    expect(section).toContain('- home / default / 390x844: 73 entries (73 found, first 1 listed)');
   });
 });
 
@@ -900,6 +1213,101 @@ describe('live-pass execute', () => {
     expect(report).toContain('## Working tree');
     expect(report).toContain('WARNING');
     expect(report).toContain('src/app/index.tsx');
+  });
+});
+
+describe('live-pass execute: checkout, turns and layout checks', () => {
+  function passWithOneFrame(artifactDir: string, layout?: unknown) {
+    mockExecuteAgyJson.mockImplementation(async () => {
+      const file = writeFrameFile(artifactDir, frameFileName(HOME_TARGET));
+      if (layout !== undefined) writeLayoutFile(artifactDir, frameFileName(HOME_TARGET), layout);
+      writeManifest(artifactDir, [{ file }]);
+      return envelope(makeResult({ frames: [makeFrame({ file })] }), { num_turns: 9 });
+    });
+  }
+
+  it('reads the branch and HEAD of a git working directory into the prompt', async () => {
+    const workDir = makeWorkDir();
+    const git = (...args: string[]) => execFileSync('git', args, { cwd: workDir, encoding: 'utf-8' }).trim();
+    git('init', '--quiet', '--initial-branch', 'feat/served');
+    git('-c', 'user.email=t@example.com', '-c', 'user.name=t', 'commit', '--quiet', '--allow-empty', '-m', 'seed');
+    const head = git('rev-parse', 'HEAD');
+    mockExecuteAgyJson.mockResolvedValue(envelope(makeResult()));
+
+    await run({ targets: [HOME_TARGET], brief: 'b', driver: 'playwright', workingDirectory: workDir });
+
+    expect(mockExecuteAgyJson.mock.calls[0][0]).toContain(`- Checkout under test: feat/served at ${head}. Read for you, so never run git.`);
+  });
+
+  it('runs on a working directory that is not a git checkout', async () => {
+    const workDir = makeWorkDir();
+    mockExecuteAgyJson.mockResolvedValue(envelope(makeResult()));
+
+    await run({ targets: [HOME_TARGET], brief: 'b', driver: 'playwright', workingDirectory: workDir });
+
+    expect(mockExecuteAgyJson.mock.calls[0][0]).toContain("- Checkout under test: not a git checkout with a commit, so rely on the brief's marker alone.");
+  });
+
+  it('prints turns per frame under the usage line', async () => {
+    const workDir = makeWorkDir();
+    const artifactDir = path.join(workDir, '.live-pass', 'run1');
+    passWithOneFrame(artifactDir);
+
+    const report = await run({ targets: [HOME_TARGET], brief: 'b', driver: 'playwright', workingDirectory: workDir, artifactDir });
+
+    expect(report).toMatch(/\nUsage: 9 turns [^\n]*\n\nTurns per frame: 9 \(9 turns \/ 1 frames\)\n/);
+  });
+
+  it('reports layout defects for the caller to judge without changing a PASS', async () => {
+    const workDir = makeWorkDir();
+    const artifactDir = path.join(workDir, '.live-pass', 'run1');
+    passWithOneFrame(artifactDir, makeLayoutReport({ found: 1, entries: [SPILL_ENTRY] }));
+
+    const report = await run({ targets: [HOME_TARGET], brief: 'b', driver: 'playwright', workingDirectory: workDir, artifactDir });
+
+    expect(report).toContain('# Live pass: PASS\n');
+    expect(report).toContain('## Why\n- none');
+    expect(report).toContain('## Layout checks (measured in the page)\n- home / default / 390x844: 1 entry\n  - text-spill "Uploaded to the studio wins wall" testID=label at 0,0 320x20');
+  });
+
+  it.each([
+    ['missing', undefined, 'MISSING'],
+    ['malformed', '{"check":', 'MALFORMED'],
+  ])('shows a %s layout file as not run, and still passes', async (_label, layout, status) => {
+    const workDir = makeWorkDir();
+    const artifactDir = path.join(workDir, '.live-pass', 'run1');
+    passWithOneFrame(artifactDir, layout);
+
+    const report = await run({ targets: [HOME_TARGET], brief: 'b', driver: 'playwright', workingDirectory: workDir, artifactDir });
+
+    expect(report).toContain('# Live pass: PASS\n');
+    expect(report).toContain(`- home / default / 390x844: not run (${status}: `);
+    expect(report).not.toContain('layout.json (home');
+  });
+
+  it('never feeds layout entries into the derived verdict', async () => {
+    const workDir = makeWorkDir();
+    const clean = path.join(workDir, '.live-pass', 'clean');
+    const defective = path.join(workDir, '.live-pass', 'defective');
+    passWithOneFrame(clean, makeLayoutReport());
+    const cleanReport = await run({ targets: [HOME_TARGET], brief: 'b', driver: 'playwright', workingDirectory: workDir, artifactDir: clean });
+    passWithOneFrame(defective, makeLayoutReport({ found: 50, entries: Array(50).fill(SPILL_ENTRY) }));
+    const defectiveReport = await run({ targets: [HOME_TARGET], brief: 'b', driver: 'playwright', workingDirectory: workDir, artifactDir: defective });
+
+    expect(defectiveReport).toContain('- home / default / 390x844: 50 entries');
+    expect(cleanReport).toContain('- home / default / 390x844: clean');
+    const verdictAndWhy = (report: string) => report.slice(report.indexOf('# Live pass'), report.indexOf('## Served-branch check'));
+    expect(verdictAndWhy(defectiveReport).replace(defective, clean)).toBe(verdictAndWhy(cleanReport));
+  });
+
+  it('adds no layout section to a maestro pass', async () => {
+    const workDir = makeWorkDir();
+    const artifactDir = path.join(workDir, '.live-pass', 'run1');
+    passWithOneFrame(artifactDir);
+
+    const report = await run({ targets: [HOME_TARGET], brief: 'b', driver: 'maestro', workingDirectory: workDir, artifactDir });
+
+    expect(report).not.toContain('Layout checks');
   });
 });
 
