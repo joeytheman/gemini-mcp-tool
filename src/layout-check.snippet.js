@@ -18,9 +18,11 @@
   const capped = (s) => (s.webkitLineClamp && s.webkitLineClamp !== 'none') || s.textOverflow === 'ellipsis';
   const blockOf = (el) => { let b = el; while (b.parentElement && ['inline', 'contents'].includes(cs(b).display)) b = b.parentElement; return b; };
 
-  const inOverlay = (el) => el.closest(DEV_OVERLAYS);
-  const overlayBox = [...document.querySelectorAll(DEV_OVERLAYS)].flatMap((o) => [o, ...o.querySelectorAll('*')]).find((el) => shown(el, el.getBoundingClientRect()));
-  if (overlayBox) add(entries, 'dev-overlay', inOverlay(overlayBox), overlayBox.getBoundingClientRect());
+  const inOverlay = (el) => { for (let n = el; n; n = n.parentElement || n.getRootNode().host) if (n.matches(DEV_OVERLAYS)) return n; return null; };
+  const tree = (el) => [el, ...[...el.children, ...(el.shadowRoot?.children ?? [])].flatMap(tree)];
+  const area = (el) => { const r = el.getBoundingClientRect(); return shown(el, r) ? r.width * r.height : 0; };
+  const overlayBox = [...document.querySelectorAll(DEV_OVERLAYS)].flatMap(tree).reduce((best, el) => (area(el) > (best ? area(best) : 0) ? el : best), null);
+  if (overlayBox) add(entries, 'dev-overlay', inOverlay(overlayBox), overlayBox.getBoundingClientRect(), tree(overlayBox).map(words).find(Boolean) ?? '');
 
   const page = document.scrollingElement || document.documentElement;
   if (page.scrollWidth > W) add(entries, 'page-scroll-x', null, { left: 0, top: 0, width: page.scrollWidth, height: H }, 'scrollWidth ' + page.scrollWidth + ' > innerWidth ' + W);

@@ -282,7 +282,7 @@ describe('LAYOUT_CHECK_SNIPPET in headless Chromium', () => {
     ]);
   });
 
-  it('reports a framework dev overlay once and keeps it out of every other check', async () => {
+  it('reports an Expo dev overlay drawn in the shadow root of a zero-size host once, with its full-screen box and text, and keeps it out of every other check', async () => {
     const report = await measure('dev-overlay.html');
 
     expect(report.entries).toEqual([
@@ -290,8 +290,68 @@ describe('LAYOUT_CHECK_SNIPPET in headless Chromium', () => {
     ]);
   });
 
-  it('reports what the same overlay covers and clips when it is not a known dev overlay', async () => {
+  it('reports what the shadow-root overlay covers when its host is not a known dev overlay', async () => {
     const report = await measure('dev-overlay.html', async (page) => {
+      await page.evaluate(() => document.getElementById('error-overlay')?.removeAttribute('id'));
+    });
+
+    expect(report.entries).toEqual([
+      { kind: 'control-covered', text: 'Sign in', testID: 'sign-in', rect: { x: 0, y: 0, width: 200, height: 44 } },
+    ]);
+  });
+
+  it('reports the full-screen overlay rather than the error toast when both show', async () => {
+    const report = await measure('dev-overlay.html', async (page) => {
+      await page.evaluate(() => {
+        const host = document.createElement('div');
+        host.id = 'error-toast';
+        host.style.cssText = 'position:fixed;left:0;bottom:0;width:0;height:0';
+        document.body.prepend(host);
+        host.attachShadow({ mode: 'open' }).innerHTML = '<div style="position:fixed;left:8px;right:8px;bottom:8px;height:48px">1 error</div>';
+      });
+    });
+
+    expect(report.entries).toEqual([
+      { kind: 'dev-overlay', text: 'Uncaught Error: something broke in a component Dismiss', testID: null, rect: { x: 0, y: 0, width: 390, height: 844 } },
+    ]);
+  });
+
+  it('reports an Expo error toast drawn in the shadow root of a zero-size host, with the toast\'s box and text, and keeps it out of the covered check', async () => {
+    const report = await measure('dev-overlay-zero-root.html');
+
+    expect(report.entries).toEqual([
+      { kind: 'dev-overlay', text: '1 error', testID: null, rect: { x: 8, y: 788, width: 374, height: 48 } },
+    ]);
+  });
+
+  it('reports no dev overlay when the shadow-root toast shows nothing', async () => {
+    const report = await measure('dev-overlay-zero-root.html', async (page) => {
+      await page.evaluate(() => { (document.getElementById('error-toast')?.shadowRoot?.firstElementChild as HTMLElement).style.display = 'none'; });
+    });
+
+    expect(report.entries).toEqual([]);
+  });
+
+  it('reports what the shadow-root toast covers when its host is not a known dev overlay', async () => {
+    const report = await measure('dev-overlay-zero-root.html', async (page) => {
+      await page.evaluate(() => document.getElementById('error-toast')?.removeAttribute('id'));
+    });
+
+    expect(report.entries).toEqual([
+      { kind: 'control-covered', text: 'Save', testID: 'save', rect: { x: 0, y: 780, width: 200, height: 44 } },
+    ]);
+  });
+
+  it('reports a plain-DOM dev overlay once and keeps it out of every other check', async () => {
+    const report = await measure('dev-overlay-plain.html');
+
+    expect(report.entries).toEqual([
+      { kind: 'dev-overlay', text: 'Uncaught Error: something broke in a component Dismiss', testID: null, rect: { x: 0, y: 0, width: 390, height: 844 } },
+    ]);
+  });
+
+  it('reports what the plain-DOM overlay covers and clips when it is not a known dev overlay', async () => {
+    const report = await measure('dev-overlay-plain.html', async (page) => {
       await page.evaluate(() => document.getElementById('error-overlay')?.removeAttribute('id'));
     });
 
@@ -301,24 +361,24 @@ describe('LAYOUT_CHECK_SNIPPET in headless Chromium', () => {
     ]);
   });
 
-  it('reports a dev overlay whose root has no size but whose fixed child shows, and keeps it out of the covered check', async () => {
-    const report = await measure('dev-overlay-zero-root.html');
+  it('reports a plain-DOM dev overlay whose root has no size but whose fixed child shows, and keeps it out of the covered check', async () => {
+    const report = await measure('dev-overlay-zero-root-plain.html');
 
     expect(report.entries).toEqual([
       { kind: 'dev-overlay', text: '1 error', testID: null, rect: { x: 8, y: 788, width: 374, height: 48 } },
     ]);
   });
 
-  it('reports no dev overlay when the zero-size root shows nothing', async () => {
-    const report = await measure('dev-overlay-zero-root.html', async (page) => {
+  it('reports no dev overlay when the plain-DOM zero-size root shows nothing', async () => {
+    const report = await measure('dev-overlay-zero-root-plain.html', async (page) => {
       await page.evaluate(() => { (document.querySelector('[data-testid="toast-body"]') as HTMLElement).style.display = 'none'; });
     });
 
     expect(report.entries).toEqual([]);
   });
 
-  it('reports what the zero-size root\'s child covers when it is not a known dev overlay', async () => {
-    const report = await measure('dev-overlay-zero-root.html', async (page) => {
+  it('reports what the plain-DOM zero-size root\'s child covers when it is not a known dev overlay', async () => {
+    const report = await measure('dev-overlay-zero-root-plain.html', async (page) => {
       await page.evaluate(() => document.getElementById('error-toast')?.removeAttribute('id'));
     });
 

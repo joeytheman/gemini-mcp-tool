@@ -1,4 +1,8 @@
 <!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;font:16px/20px sans-serif}button{font:inherit;border:0;padding:0;margin:0}</style></head><body>
 <form style="width:390px"><button data-testid="save" style="width:200px;height:44px;margin-top:780px">Save</button></form>
-<div id="error-toast" style="position:fixed;left:0;bottom:0;width:0;height:0"><div data-testid="toast-body" style="position:fixed;left:8px;right:8px;bottom:8px;height:48px;background:#c00;color:#fff">1 error</div></div>
+<div id="error-toast" style="position:fixed;left:0;bottom:0;width:0;height:0"></div>
+<script>
+document.getElementById('error-toast').attachShadow({ mode: 'open' }).innerHTML =
+  '<div style="position:fixed;left:8px;right:8px;bottom:8px;height:48px;background:#c00;color:#fff;font:16px/20px sans-serif"><span>1 error</span></div>';
+</script>
 </body></html>
