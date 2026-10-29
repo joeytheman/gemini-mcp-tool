@@ -38,7 +38,7 @@ export const livePassTargetSchema = z.object({
 export const livePassArgsSchema = z.object({
   targets: z.array(livePassTargetSchema).min(1).describe("Every frame the pass must produce. The verdict is derived from this list: a target that produced no frame fails the pass, whether Gemini skipped it with a reason or never reported it at all — a skip explains missing evidence, it does not excuse it."),
   brief: z.string().refine(value => value.trim().length > 0, ERROR_MESSAGES.LIVE_PASS_NO_BRIEF)
-    .describe("Every fact Gemini needs, because it may not read code to find one: the entry URL or app id, the served-branch marker, and per target the user path, the labels or testIDs on it, the seed account and ids, and how long toasts and pending states stay on screen. A target whose fact is missing is skipped with 'brief missing: <fact>'."),
+    .describe("Every fact Gemini needs, because it may not read code to find one: the app's start URL or app id, any link a user arrives by (an invite, email or share link) with where it comes from, the served-branch marker, and per target the user path, the labels or testIDs on it, the seed account and ids, and how long toasts and pending states stay on screen. A target whose fact is missing is skipped with 'brief missing: <fact>'."),
   workingDirectory: z.string().min(1).describe("Absolute path to the worktree under test. Used as the agy cwd and workspace root; must exist and must not be a filesystem root."),
   artifactDir: z.string().optional().describe("Absolute directory for the captured PNGs and manifest.json. Must be strictly inside workingDirectory. Defaults to <workingDirectory>/.live-pass/<timestamp>."),
   driver: z.enum(['playwright', 'maestro']).describe("Which MCP server Gemini drives: 'playwright' for web, 'maestro' for a booted simulator."),
@@ -75,6 +75,7 @@ const frameSchema = z.object({
   viewport: z.string().describe("The requested target's viewport string, copied exactly."),
   verdict: z.enum(['PASS', 'FAIL']),
   observed: z.string().describe("What the image actually shows, in your own words, after opening it."),
+  link_source: z.string().optional().describe("Only when this target began at a link the brief says the user arrives by: the brief's words naming where that link comes from, quoted."),
 });
 
 const findingSchema = z.object({
@@ -180,9 +181,9 @@ function renderTargets(targets: LivePassTarget[], artifactDir: string, driver: '
 }
 
 const PLAYWRIGHT_PROCEDURE = `Driver: the "${LIVE_PASS.PLAYWRIGHT_MCP_NAME}" MCP server.
-browser_navigate goes only to a target's entry URL (where the brief says that target's user path starts) or reloads, meaning it navigates to the URL the page is already on, when the brief makes a reload part of the path. Any other URL in the brief is context, never a navigation target.
+browser_navigate opens only the URLs the "User path" section allows.
 For each target, in order:
-- Start from its entry URL when the brief gives it one; otherwise walk on from wherever the previous target left you.
+- Reach it as the "User path" section says.
 - Locate each control cheaply, in this order: a testID the brief names, as target [data-testid="<testID>"]; then browser_find with its visible label; then browser_snapshot with a target and a small depth scoped to that region. Never take a full-page snapshot just to look around, and never copy a snapshot or accessibility tree into your answer.
 - Native dialogs such as window.confirm and window.alert block the page: accept or dismiss each with browser_handle_dialog right after the click that opened it.
 - Wait until the marker the brief names for that state is present. Never screenshot a page that still shows a spinner or skeleton when a content state was requested.
@@ -217,7 +218,7 @@ const PLAYWRIGHT_CHEAT_SHEET = `## Tool cheat sheet (the installed parameters: n
 const MAESTRO_PROCEDURE = `Driver: the "${LIVE_PASS.MAESTRO_MCP_NAME}" MCP server.
 For each target, in order:
 - list_devices first and use the returned device_id for every later call. Never guess a device.
-- Reach each state through the app's UI with inline YAML flows (launchApp, tapOn, inputText), from wherever the previous target left you. Never use openLink to skip a user step.
+- Reach each state as the "User path" section says, with inline YAML flows: launchApp only to open the app at the start, then tapOn and inputText; openLink only for a link arrival that section allows.
 - Locate controls by the testID the brief names (id:), then by the full visible text inspect_screen reports (text:).
 - inspect_screen to confirm the state settled.
 - Never use take_screenshot for evidence: it returns an image inline and saves nothing.
@@ -275,8 +276,11 @@ Everything you need is in this prompt, the brief, and what the app shows you.
 - Never read code to work out why something failed. Report what you saw.
 
 ## User path
-- Reach every target the way a user would: sign in through the sign-in form, tap through the navigation, and fill and submit forms.
-- No shortcut past a user step: no jump to a deeper URL or deep link, and no script that clicks, navigates, or sets storage, cookies or app state for you.
+- The pass opens the app once, at its start URL (or by launching it on a device), as the brief names it.
+- A target may begin at a link of its own only when the brief says the user arrives by that link, such as an invite, email or share link, and names where the link comes from. Open it as following that link would, and quote the brief's words naming the source in that frame's "link_source".
+- Every other target is reached by taps from the previous screen: sign in through the sign-in form, tap through the navigation, and fill and submit forms. Any other URL or deep link in the brief is context, never a navigation target.
+- A reload, only where the brief makes one part of the path, opens the URL the page is already on.
+- No script that clicks, navigates, or sets storage, cookies or app state for you.
 
 ## Dead ends
 - When the path to a target breaks (a control is missing, a tap does nothing, a screen errors), stop that target and add it to "skipped" with the step where the path broke, such as "step 3: tapped Save, nothing happened". A dead end a user would hit is also a finding.
@@ -656,8 +660,9 @@ export function formatLivePassReport(input: {
 
   parts.push(section('Frames', bulletList(result.frames.map(frame => {
     const abs = frameAbsolutePath(frame.file, artifactDir);
+    const arrival = frame.link_source ? `\n  arrived by link: ${frame.link_source}` : '';
     return `${frame.verdict} [${statusById.get(abs) ?? 'UNKNOWN'}] ${frame.screen} / ${frame.state} / ${frame.viewport}\n` +
-      `  file: ${abs}\n  expected: ${frame.expected}\n  observed: ${frame.observed}`;
+      `  file: ${abs}${arrival}\n  expected: ${frame.expected}\n  observed: ${frame.observed}`;
   }))));
 
   const renderFindings = (items: LivePassResult['findings']) => bulletList(items.map(item =>

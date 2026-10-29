@@ -10,6 +10,12 @@ import { makeTempDir, cleanupTempDirs } from './utils/test-helpers.js';
 const FIXTURES = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures', 'layout');
 const VIEWPORT = { width: 390, height: 844 };
 
+const CHIP_RECTS = {
+  one: { x: 0, y: 0, width: 150, height: 30 },
+  two: { x: 150, y: 0, width: 150, height: 30 },
+  three: { x: 300, y: 0, width: 150, height: 30 },
+};
+
 let browser: Browser;
 let page: Page;
 
@@ -230,6 +236,36 @@ describe('LAYOUT_CHECK_SNIPPET in headless Chromium', () => {
     ]);
   });
 
+  it('reports chips in a horizontal scroller that a fixed toast covers', async () => {
+    const report = await measure('toast-over-chips.html');
+
+    expect(report.entries).toEqual([
+      { kind: 'control-covered', text: 'Chip one', testID: 'chip-one', rect: CHIP_RECTS.one },
+      { kind: 'control-covered', text: 'Chip two', testID: 'chip-two', rect: CHIP_RECTS.two },
+      { kind: 'control-covered', text: 'Chip three', testID: 'chip-three', rect: CHIP_RECTS.three },
+    ]);
+  });
+
+  it('still reports the chips when the toast sits beside the scroller in its row but overhangs the row', async () => {
+    const report = await measure('toast-over-chips.html', async (page) => {
+      await page.evaluate(() => { document.querySelector('main')?.append(document.querySelector('[data-testid="toast"]') as HTMLElement); });
+    });
+
+    expect(report.entries.map((entry) => [entry.kind, entry.testID])).toEqual([
+      ['control-covered', 'chip-one'],
+      ['control-covered', 'chip-two'],
+      ['control-covered', 'chip-three'],
+    ]);
+  });
+
+  it('reports nothing on the same chip row once the toast is gone', async () => {
+    const report = await measure('toast-over-chips.html', async (page) => {
+      await page.evaluate(() => document.querySelector('[data-testid="toast"]')?.remove());
+    });
+
+    expect(report.entries).toEqual([]);
+  });
+
   it('ignores whitespace hanging past a pre-wrap heading where it wraps', async () => {
     const report = await measure('prewrap-heading.html');
 
@@ -262,6 +298,32 @@ describe('LAYOUT_CHECK_SNIPPET in headless Chromium', () => {
     expect(report.entries).toEqual([
       { kind: 'text-clipped', text: 'Uncaught Error: something broke in a component', testID: null, rect: { x: 0, y: 0, width: 100, height: 20 } },
       { kind: 'control-covered', text: 'Sign in', testID: 'sign-in', rect: { x: 0, y: 0, width: 200, height: 44 } },
+    ]);
+  });
+
+  it('reports a dev overlay whose root has no size but whose fixed child shows, and keeps it out of the covered check', async () => {
+    const report = await measure('dev-overlay-zero-root.html');
+
+    expect(report.entries).toEqual([
+      { kind: 'dev-overlay', text: '1 error', testID: null, rect: { x: 8, y: 788, width: 374, height: 48 } },
+    ]);
+  });
+
+  it('reports no dev overlay when the zero-size root shows nothing', async () => {
+    const report = await measure('dev-overlay-zero-root.html', async (page) => {
+      await page.evaluate(() => { (document.querySelector('[data-testid="toast-body"]') as HTMLElement).style.display = 'none'; });
+    });
+
+    expect(report.entries).toEqual([]);
+  });
+
+  it('reports what the zero-size root\'s child covers when it is not a known dev overlay', async () => {
+    const report = await measure('dev-overlay-zero-root.html', async (page) => {
+      await page.evaluate(() => document.getElementById('error-toast')?.removeAttribute('id'));
+    });
+
+    expect(report.entries).toEqual([
+      { kind: 'control-covered', text: 'Save', testID: 'save', rect: { x: 0, y: 780, width: 200, height: 44 } },
     ]);
   });
 

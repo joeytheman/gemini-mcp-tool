@@ -164,6 +164,11 @@ describe('livePassArgsSchema', () => {
     driver: 'playwright',
   };
 
+  it('asks the caller\'s brief for the start URL and any link a user arrives by, with its source', () => {
+    expect(livePassArgsSchema.shape.brief.description).toContain("the app's start URL or app id, any link a user arrives by (an invite, email or share link) with where it comes from");
+    expect(livePassArgsSchema.shape.brief.description).not.toMatch(/entry url/i);
+  });
+
   it('applies the documented defaults', () => {
     const parsed = livePassArgsSchema.parse(minimal);
 
@@ -210,6 +215,13 @@ describe('LIVE_PASS_RESULT_JSON_SCHEMA', () => {
 
     expect(frames.items.required).toEqual(expect.arrayContaining(['file', 'expected', 'observed', 'verdict']));
   });
+
+  it('offers link_source on a frame without requiring it', () => {
+    const frames = (LIVE_PASS_RESULT_JSON_SCHEMA.properties as any).frames;
+
+    expect(frames.items.properties.link_source.type).toBe('string');
+    expect(frames.items.required).not.toContain('link_source');
+  });
 });
 
 // ------------------------------------------------------------------- prompt
@@ -244,7 +256,7 @@ describe('frameFileName', () => {
 
 describe('buildLivePassPrompt', () => {
   const base = {
-    brief: 'Entry URL http://localhost:8123; marker: footer BRANCH: feat/orders',
+    brief: 'Start URL http://localhost:8123; marker: footer BRANCH: feat/orders',
     targets: [HOME_TARGET, { ...HOME_TARGET, state: 'offline', expected: 'offline notice plus Retry' }],
     workingDirectory: '/work/tree',
     artifactDir: '/work/tree/.live-pass/run1',
@@ -311,7 +323,7 @@ describe('buildLivePassPrompt', () => {
 
 describe('buildLivePassPrompt: context Gemini used to dig for', () => {
   const base = {
-    brief: 'Entry URL http://localhost:8123; marker: footer BRANCH: feat/orders',
+    brief: 'Start URL http://localhost:8123; marker: footer BRANCH: feat/orders',
     targets: [HOME_TARGET, { ...HOME_TARGET, state: 'offline', expected: 'offline notice plus Retry' }],
     workingDirectory: '/work/tree',
     artifactDir: '/work/tree/.live-pass/run1',
@@ -395,26 +407,42 @@ describe('buildLivePassPrompt: context Gemini used to dig for', () => {
     expect(prompt).not.toContain('Working directory (read-only)');
   });
 
-  it.each(['playwright', 'maestro'] as const)('makes the %s pass reach every target the way a user would', (driver) => {
+  it.each(['playwright', 'maestro'] as const)('opens the %s app once and reaches every other target by taps from the previous screen', (driver) => {
     const prompt = buildLivePassPrompt({ ...base, driver });
 
-    expect(prompt).toContain('Reach every target the way a user would: sign in through the sign-in form, tap through the navigation, and fill and submit forms.');
-    expect(prompt).toContain('No shortcut past a user step: no jump to a deeper URL or deep link, and no script that clicks, navigates, or sets storage, cookies or app state for you.');
+    expect(prompt).toContain('## User path\n- The pass opens the app once, at its start URL (or by launching it on a device), as the brief names it.');
+    expect(prompt).toContain('- Every other target is reached by taps from the previous screen: sign in through the sign-in form, tap through the navigation, and fill and submit forms. Any other URL or deep link in the brief is context, never a navigation target.');
+    expect(prompt).toContain('- A reload, only where the brief makes one part of the path, opens the URL the page is already on.');
+    expect(prompt).toContain('- No script that clicks, navigates, or sets storage, cookies or app state for you.');
   });
 
-  it('navigates a web pass only to a target\'s entry URL or a reload, and keeps browser_evaluate to the printed snippets', () => {
+  it.each(['playwright', 'maestro'] as const)('lets a %s target begin at its own link only when the brief names the link the user arrives by, and has the frame quote its source', (driver) => {
+    const prompt = buildLivePassPrompt({ ...base, driver });
+
+    expect(prompt).toContain('- A target may begin at a link of its own only when the brief says the user arrives by that link, such as an invite, email or share link, and names where the link comes from. Open it as following that link would, and quote the brief\'s words naming the source in that frame\'s "link_source".');
+  });
+
+  it.each(['playwright', 'maestro'] as const)('leaves no per-target entry URL or URL jump anywhere in the %s prompt', (driver) => {
+    const prompt = buildLivePassPrompt({ ...base, driver });
+
+    expect(prompt).not.toMatch(/entry url/i);
+    expect(prompt).not.toContain('deeper URL');
+    expect(prompt).not.toContain('walk on from wherever');
+    expect(prompt).not.toContain('Never use openLink to skip a user step.');
+  });
+
+  it('sends a web pass\'s browser_navigate only where the user path allows, and keeps browser_evaluate to the printed snippets', () => {
     const prompt = buildLivePassPrompt({ ...base, driver: 'playwright' });
 
     expect(prompt).not.toContain("browser_navigate to the target's route");
-    expect(prompt).toContain("browser_navigate goes only to a target's entry URL (where the brief says that target's user path starts) or reloads, meaning it navigates to the URL the page is already on, when the brief makes a reload part of the path. Any other URL in the brief is context, never a navigation target.");
-    expect(prompt).toContain('- Start from its entry URL when the brief gives it one; otherwise walk on from wherever the previous target left you.');
+    expect(prompt).toContain('browser_navigate opens only the URLs the "User path" section allows.\nFor each target, in order:\n- Reach it as the "User path" section says.');
     expect(prompt).toContain('browser_evaluate runs only the two snippets printed here. Never use it to click, type, navigate, or set storage, cookies or app state.');
   });
 
-  it('keeps a maestro pass off deep links', () => {
+  it('has a maestro pass launch the app only at the start and openLink only for a link arrival', () => {
     const prompt = buildLivePassPrompt({ ...base, driver: 'maestro' });
 
-    expect(prompt).toContain('Never use openLink to skip a user step.');
+    expect(prompt).toContain('- Reach each state as the "User path" section says, with inline YAML flows: launchApp only to open the app at the start, then tapOn and inputText; openLink only for a link arrival that section allows.');
   });
 
   it('locates web controls by testID, then browser_find, then a scoped snapshot', () => {
@@ -1313,6 +1341,31 @@ describe('live-pass execute: checkout, turns and layout checks', () => {
     expect(report).toMatch(/\nUsage: 9 turns [^\n]*\n\nTurns per frame: 9 \(9 turns \/ 1 frames\)\n/);
   });
 
+  it('prints the quoted link source under a frame that began at a link the user arrives by', async () => {
+    const workDir = makeWorkDir();
+    const artifactDir = path.join(workDir, '.live-pass', 'run1');
+    mockExecuteAgyJson.mockImplementation(async () => {
+      const file = writeFrameFile(artifactDir, frameFileName(HOME_TARGET));
+      writeManifest(artifactDir, [{ file }]);
+      return envelope(makeResult({ frames: [makeFrame({ file, link_source: 'the invite email the studio owner sends' })] }));
+    });
+
+    const report = await run({ targets: [HOME_TARGET], brief: 'b', driver: 'playwright', workingDirectory: workDir, artifactDir });
+
+    expect(report).toContain(`  file: ${path.join(artifactDir, frameFileName(HOME_TARGET))}\n  arrived by link: the invite email the studio owner sends\n  expected: heading 'Hello'`);
+  });
+
+  it('prints no link line under a frame reached by taps', async () => {
+    const workDir = makeWorkDir();
+    const artifactDir = path.join(workDir, '.live-pass', 'run1');
+    passWithOneFrame(artifactDir);
+
+    const report = await run({ targets: [HOME_TARGET], brief: 'b', driver: 'playwright', workingDirectory: workDir, artifactDir });
+
+    expect(report).toContain(`  file: ${path.join(artifactDir, frameFileName(HOME_TARGET))}\n  expected: heading 'Hello'`);
+    expect(report).not.toContain('arrived by link');
+  });
+
   it('reports layout defects for the caller to judge without changing a PASS', async () => {
     const workDir = makeWorkDir();
     const artifactDir = path.join(workDir, '.live-pass', 'run1');
@@ -1369,6 +1422,12 @@ describe('live-pass execute: checkout, turns and layout checks', () => {
 describe('livePassResultSchema', () => {
   it('accepts a fresh pass with empty delta arrays', () => {
     expect(livePassResultSchema.safeParse(makeResult()).success).toBe(true);
+  });
+
+  it('accepts a frame with a link_source and one without', () => {
+    const result = makeResult({ frames: [makeFrame(), makeFrame({ file: '/tmp/invite.png', link_source: 'the share link a teammate texts' })] });
+
+    expect(livePassResultSchema.safeParse(result).success).toBe(true);
   });
 
   it('rejects a frame verdict outside PASS/FAIL', () => {
