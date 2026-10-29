@@ -17,7 +17,9 @@ const entryFields = {
   rect: rectSchema,
 };
 
-export const LAYOUT_DEFECT_KINDS = [
+/** `dev-overlay` marks a frame a framework dev overlay (such as Expo's error overlay) covered; its other entries are suspect. */
+export const LAYOUT_ENTRY_KINDS = [
+  'dev-overlay',
   'page-scroll-x',
   'text-spill',
   'text-clipped',
@@ -29,7 +31,7 @@ export const layoutReportSchema = z.object({
   check: z.literal(LIVE_PASS.LAYOUT_CHECK_ID),
   viewport: z.object({ width: z.number(), height: z.number() }),
   found: z.number().int().nonnegative(),
-  entries: z.array(z.object({ kind: z.enum(LAYOUT_DEFECT_KINDS), ...entryFields })).max(LIVE_PASS.LAYOUT_MAX_ENTRIES),
+  entries: z.array(z.object({ kind: z.enum(LAYOUT_ENTRY_KINDS), ...entryFields })).max(LIVE_PASS.LAYOUT_MAX_ENTRIES),
   clamped: z.array(z.object({ kind: z.literal('text-clamped'), ...entryFields })).max(LIVE_PASS.LAYOUT_MAX_ENTRIES),
 });
 

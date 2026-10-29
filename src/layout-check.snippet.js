@@ -1,5 +1,6 @@
 () => {
   const W = innerWidth, H = innerHeight, CAP = 50, LEVELS = 4;
+  const DEV_OVERLAYS = '#error-overlay,#error-toast';
   const entries = [], clamped = [];
   let found = 0;
   const cs = (el) => getComputedStyle(el);
@@ -17,12 +18,16 @@
   const capped = (s) => (s.webkitLineClamp && s.webkitLineClamp !== 'none') || s.textOverflow === 'ellipsis';
   const blockOf = (el) => { let b = el; while (b.parentElement && ['inline', 'contents'].includes(cs(b).display)) b = b.parentElement; return b; };
 
+  const inOverlay = (el) => el.closest(DEV_OVERLAYS);
+  const overlay = [...document.querySelectorAll(DEV_OVERLAYS)].find((o) => shown(o, o.getBoundingClientRect()));
+  if (overlay) add(entries, 'dev-overlay', overlay, overlay.getBoundingClientRect());
+
   const page = document.scrollingElement || document.documentElement;
   if (page.scrollWidth > W) add(entries, 'page-scroll-x', null, { left: 0, top: 0, width: page.scrollWidth, height: H }, 'scrollWidth ' + page.scrollWidth + ' > innerWidth ' + W);
 
   const range = document.createRange();
   for (const el of document.body.querySelectorAll('*')) {
-    if (el.isContentEditable) continue;
+    if (el.isContentEditable || inOverlay(el)) continue;
     const texts = [...el.childNodes].filter((n) => n.nodeType === 3 && n.textContent.trim());
     if (!texts.length) continue;
     const own = blockOf(el);
@@ -30,10 +35,13 @@
     if (!shown(el, ownRect) || !onScreen(ownRect)) continue;
     let l = Infinity, t = Infinity, r = -Infinity, b = -Infinity;
     for (const n of texts) {
-      range.selectNodeContents(n);
-      const tr = range.getBoundingClientRect();
-      if (!tr.width) continue;
-      l = Math.min(l, tr.left); t = Math.min(t, tr.top); r = Math.max(r, tr.right); b = Math.max(b, tr.bottom);
+      for (const run of n.textContent.matchAll(/\S+/g)) {
+        range.setStart(n, run.index);
+        range.setEnd(n, run.index + run[0].length);
+        const tr = range.getBoundingClientRect();
+        if (!tr.width) continue;
+        l = Math.min(l, tr.left); t = Math.min(t, tr.top); r = Math.max(r, tr.right); b = Math.max(b, tr.bottom);
+      }
     }
     if (l === Infinity) continue;
     const ownStyle = cs(own);
@@ -56,16 +64,31 @@
   }
 
   const modal = [...document.querySelectorAll('[aria-modal="true"]')].find((m) => shown(m, m.getBoundingClientRect()));
+  const visibleCentre = (el, r) => {
+    let l = Math.max(r.left, 0), t = Math.max(r.top, 0), rr = Math.min(r.right, W), b = Math.min(r.bottom, H), absolute = false;
+    for (let c = el, a = el.parentElement; a && a !== document.documentElement; c = a, a = a.parentElement) {
+      const position = cs(c).position, s = cs(a);
+      if (position === 'fixed') break;
+      if (position === 'absolute') absolute = true;
+      if (absolute && s.position === 'static') continue;
+      absolute = false;
+      if (s.overflowX === 'visible' && s.overflowY === 'visible') continue;
+      const ar = a.getBoundingClientRect(), al = ar.left + a.clientLeft, at = ar.top + a.clientTop;
+      l = Math.max(l, al); t = Math.max(t, at); rr = Math.min(rr, al + a.clientWidth); b = Math.min(b, at + a.clientHeight);
+    }
+    return rr > l && b > t ? [(l + rr) / 2, (t + b) / 2] : null;
+  };
   const scrollsX = (el) => { for (let a = el.parentElement; a; a = a.parentElement) if (scrolls(cs(a).overflowX) && a.scrollWidth > a.clientWidth) return true; return false; };
   const controls = 'a[href],button,input:not([type=hidden]),select,textarea,summary,[role=button],[role=link],[role=checkbox],[role=switch],[role=radio],[role=tab],[role=menuitem],[role=option],[role=combobox],[role=slider],[tabindex]:not([tabindex="-1"])';
   for (const el of document.querySelectorAll(controls)) {
     const r = el.getBoundingClientRect();
-    if (!shown(el, r) || cs(el).pointerEvents === 'none' || r.bottom <= 0 || r.top >= H) continue;
-    if ((r.left < -0.5 || r.right > W + 0.5) && r.right > 0 && r.left < W && !scrollsX(el)) add(entries, 'control-offscreen', el, r);
-    if (modal && !modal.contains(el)) continue;
-    const x = r.left + r.width / 2, y = r.top + r.height / 2;
-    if (x < 0 || x >= W || y < 0 || y >= H) continue;
-    const hit = document.elementFromPoint(x, y);
+    if (!shown(el, r) || inOverlay(el) || cs(el).pointerEvents === 'none' || r.bottom <= 0 || r.top >= H) continue;
+    const inScrollerX = scrollsX(el);
+    if ((r.left < -0.5 || r.right > W + 0.5) && r.right > 0 && r.left < W && !inScrollerX) add(entries, 'control-offscreen', el, r);
+    if (inScrollerX || (modal && !modal.contains(el))) continue;
+    const centre = visibleCentre(el, r);
+    if (!centre) continue;
+    const hit = document.elementsFromPoint(centre[0], centre[1]).find((h) => !inOverlay(h));
     if (hit && !el.contains(hit) && !hit.contains(el)) add(entries, 'control-covered', el, r);
   }
 

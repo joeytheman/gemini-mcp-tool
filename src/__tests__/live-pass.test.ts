@@ -621,6 +621,20 @@ describe('formatLayoutSection', () => {
     ].join('\n'));
   });
 
+  it('marks a frame a framework dev overlay covered as polluted', () => {
+    const artifactDir = path.join(makeWorkDir(), 'frames');
+    const overlay = { kind: 'dev-overlay' as const, text: 'Uncaught Error', testID: null, rect: { x: 0, y: 0, width: 390, height: 844 } };
+    writeLayoutFile(artifactDir, frameFileName(HOME_TARGET), makeLayoutReport({ found: 1, entries: [overlay] }));
+
+    const section = formatLayoutSection(readLayoutChecks([HOME_TARGET], artifactDir, Date.now()));
+
+    expect(section).toBe([
+      '## Layout checks (measured in the page)',
+      '- home / default / 390x844: 1 entry (a framework dev overlay was on screen: this frame is polluted)',
+      '  - dev-overlay "Uncaught Error" at 0,0 390x844',
+    ].join('\n'));
+  });
+
   it('says when the snippet found more entries than it listed', () => {
     const artifactDir = path.join(makeWorkDir(), 'frames');
     writeLayoutFile(artifactDir, frameFileName(HOME_TARGET), makeLayoutReport({ found: 73, entries: [SPILL_ENTRY] }));

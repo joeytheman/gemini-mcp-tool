@@ -196,6 +196,84 @@ describe('LAYOUT_CHECK_SNIPPET in headless Chromium', () => {
     ]);
   });
 
+  it('ignores rows scrolled partly or fully out of their scroller, hit-testing only the visible part', async () => {
+    const report = await measure('scrolled-rows.html');
+
+    expect(report.entries).toEqual([]);
+  });
+
+  it('reports the same rows as covered once their container stops clipping them under the bottom bar', async () => {
+    const report = await measure('scrolled-rows.html', async (page) => {
+      await page.evaluate(() => { (document.querySelector('[data-testid="list"]') as HTMLElement).style.overflowY = 'visible'; });
+    });
+
+    expect(report.entries).toEqual([
+      { kind: 'control-covered', text: 'Second result', testID: 'row-2', rect: { x: 0, y: 370, width: 390, height: 60 } },
+      { kind: 'control-covered', text: 'Third result', testID: 'row-3', rect: { x: 0, y: 430, width: 390, height: 60 } },
+    ]);
+  });
+
+  it('ignores a tab in a horizontal scroller that sits under the row\'s own edge control', async () => {
+    const report = await measure('tab-row-more.html');
+
+    expect(report.entries).toEqual([]);
+  });
+
+  it('reports that tab as cut off and covered once its row stops scrolling', async () => {
+    const report = await measure('tab-row-more.html', async (page) => {
+      await page.evaluate(() => { (document.querySelector('[data-testid="sections"]') as HTMLElement).style.overflowX = 'hidden'; });
+    });
+
+    expect(report.entries).toEqual([
+      { kind: 'control-offscreen', text: 'Photos', testID: 'tab-photos', rect: { x: 300, y: 0, width: 100, height: 44 } },
+      { kind: 'control-covered', text: 'Photos', testID: 'tab-photos', rect: { x: 300, y: 0, width: 100, height: 44 } },
+    ]);
+  });
+
+  it('ignores whitespace hanging past a pre-wrap heading where it wraps', async () => {
+    const report = await measure('prewrap-heading.html');
+
+    expect(report.entries).toEqual([]);
+  });
+
+  it('reports the heading as spilling once its words stop wrapping', async () => {
+    const report = await measure('prewrap-heading.html', async (page) => {
+      await page.evaluate(() => { (document.querySelector('[data-testid="heading"]') as HTMLElement).style.whiteSpace = 'pre'; });
+    });
+
+    expect(report.entries).toEqual([
+      { kind: 'text-spill', text: 'Regionals results', testID: 'heading', rect: { x: 0, y: 0, width: 120, height: 20 } },
+    ]);
+  });
+
+  it('reports a framework dev overlay once and keeps it out of every other check', async () => {
+    const report = await measure('dev-overlay.html');
+
+    expect(report.entries).toEqual([
+      { kind: 'dev-overlay', text: 'Uncaught Error: something broke in a component Dismiss', testID: null, rect: { x: 0, y: 0, width: 390, height: 844 } },
+    ]);
+  });
+
+  it('reports what the same overlay covers and clips when it is not a known dev overlay', async () => {
+    const report = await measure('dev-overlay.html', async (page) => {
+      await page.evaluate(() => document.getElementById('error-overlay')?.removeAttribute('id'));
+    });
+
+    expect(report.entries).toEqual([
+      { kind: 'text-clipped', text: 'Uncaught Error: something broke in a component', testID: null, rect: { x: 0, y: 0, width: 100, height: 20 } },
+      { kind: 'control-covered', text: 'Sign in', testID: 'sign-in', rect: { x: 0, y: 0, width: 200, height: 44 } },
+    ]);
+  });
+
+  it('reports a header button overhanging the viewport by 4px as page scroll and a cut-off control', async () => {
+    const report = await measure('overhang-header.html');
+
+    expect(report.entries).toEqual([
+      { kind: 'page-scroll-x', text: 'scrollWidth 394 > innerWidth 390', testID: null, rect: { x: 0, y: 0, width: 394, height: 844 } },
+      { kind: 'control-offscreen', text: 'Close', testID: 'header-close', rect: { x: 350, y: 0, width: 44, height: 44 } },
+    ]);
+  });
+
   it('caps the entries at 50 and counts every one it found', async () => {
     const report = await measure('clean.html', async (page) => {
       await page.evaluate(() => {

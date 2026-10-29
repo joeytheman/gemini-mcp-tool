@@ -610,8 +610,11 @@ export function formatLayoutSection(checks: TargetLayoutCheck[]): string {
     const { entries, clamped, found } = check.report;
     if (entries.length === 0 && clamped.length === 0) return `- ${label}: clean`;
     const listed = found > entries.length ? ` (${found} found, first ${entries.length} listed)` : '';
+    const polluted = entries.some(entry => entry.kind === 'dev-overlay')
+      ? ' (a framework dev overlay was on screen: this frame is polluted)'
+      : '';
     return [
-      `- ${label}: ${found} ${found === 1 ? 'entry' : 'entries'}${listed}`,
+      `- ${label}: ${found} ${found === 1 ? 'entry' : 'entries'}${listed}${polluted}`,
       ...entries.map(entry => `  - ${formatLayoutEntry(entry)}`),
       ...clamped.map(entry => `  - capped (line clamp / ellipsis): ${formatLayoutEntry(entry)}`),
     ].join('\n');
