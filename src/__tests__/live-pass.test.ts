@@ -244,7 +244,7 @@ describe('frameFileName', () => {
 
 describe('buildLivePassPrompt', () => {
   const base = {
-    brief: 'Base URL http://localhost:8123; marker: footer BRANCH: smoke',
+    brief: 'Entry URL http://localhost:8123; marker: footer BRANCH: feat/orders',
     targets: [HOME_TARGET, { ...HOME_TARGET, state: 'offline', expected: 'offline notice plus Retry' }],
     workingDirectory: '/work/tree',
     artifactDir: '/work/tree/.live-pass/run1',
@@ -311,7 +311,7 @@ describe('buildLivePassPrompt', () => {
 
 describe('buildLivePassPrompt: context Gemini used to dig for', () => {
   const base = {
-    brief: 'Entry URL http://localhost:8123; marker: footer BRANCH: smoke',
+    brief: 'Entry URL http://localhost:8123; marker: footer BRANCH: feat/orders',
     targets: [HOME_TARGET, { ...HOME_TARGET, state: 'offline', expected: 'offline notice plus Retry' }],
     workingDirectory: '/work/tree',
     artifactDir: '/work/tree/.live-pass/run1',
@@ -323,7 +323,7 @@ describe('buildLivePassPrompt: context Gemini used to dig for', () => {
     const prompt = buildLivePassPrompt({ ...base, driver: 'playwright' });
 
     expect(prompt).toContain('- Checkout under test: feat/orders at 0123456789abcdef0123456789abcdef01234567. Read for you, so never run git.');
-    expect(prompt).toContain('using the marker in the brief, compared with the checkout above');
+    expect(prompt).toContain('The checkout above is context. Set BLOCKED over it only when the marker names a branch or commit that contradicts it. A detached HEAD never contradicts a branch name, and a short commit hash matches the full one it begins.');
   });
 
   it('names a detached HEAD instead of a branch', () => {
@@ -402,11 +402,12 @@ describe('buildLivePassPrompt: context Gemini used to dig for', () => {
     expect(prompt).toContain('No shortcut past a user step: no jump to a deeper URL or deep link, and no script that clicks, navigates, or sets storage, cookies or app state for you.');
   });
 
-  it('navigates a web pass only to the entry URL and keeps browser_evaluate to the printed snippets', () => {
+  it('navigates a web pass only to a target\'s entry URL or a reload, and keeps browser_evaluate to the printed snippets', () => {
     const prompt = buildLivePassPrompt({ ...base, driver: 'playwright' });
 
     expect(prompt).not.toContain("browser_navigate to the target's route");
-    expect(prompt).toContain('Start with browser_navigate to the entry URL the brief names. Never browser_navigate again, except to an entry URL the brief names or a reload the brief makes part of the path.');
+    expect(prompt).toContain("browser_navigate goes only to a target's entry URL (where the brief says that target's user path starts) or reloads, meaning it navigates to the URL the page is already on, when the brief makes a reload part of the path. Any other URL in the brief is context, never a navigation target.");
+    expect(prompt).toContain('- Start from its entry URL when the brief gives it one; otherwise walk on from wherever the previous target left you.');
     expect(prompt).toContain('browser_evaluate runs only the two snippets printed here. Never use it to click, type, navigate, or set storage, cookies or app state.');
   });
 
@@ -531,6 +532,32 @@ describe('readLayoutCheck', () => {
     });
   });
 
+  it('reports an empty file as MALFORMED', () => {
+    const artifactDir = path.join(makeWorkDir(), 'frames');
+    const file = writeLayoutFile(artifactDir, frameName, '');
+
+    expect(readLayoutCheck(file, artifactDir, Date.now())).toEqual({ file, status: 'MALFORMED', problem: 'empty' });
+  });
+
+  it('reports a result measured at another width than the frame as MISMATCHED', () => {
+    const artifactDir = path.join(makeWorkDir(), 'frames');
+    const file = writeLayoutFile(artifactDir, frameName, makeLayoutReport({ viewport: { width: 1280, height: 800 } }));
+
+    expect(readLayoutCheck(file, artifactDir, Date.now(), 390)).toEqual({
+      file,
+      status: 'MISMATCHED',
+      problem: 'measured at width 1280, but the frame is 390 wide',
+    });
+  });
+
+  it('accepts a result measured at the frame width whatever the height, since a scrolling frame is resized taller', () => {
+    const artifactDir = path.join(makeWorkDir(), 'frames');
+    const report = makeLayoutReport({ viewport: { width: 390, height: 2210 } });
+    const file = writeLayoutFile(artifactDir, frameName, report);
+
+    expect(readLayoutCheck(file, artifactDir, Date.now(), 390)).toEqual({ file, status: 'OK', report });
+  });
+
   it('reports a file that is not JSON as MALFORMED', () => {
     const artifactDir = path.join(makeWorkDir(), 'frames');
     const file = writeLayoutFile(artifactDir, frameName, 'undefined');
@@ -574,9 +601,23 @@ describe('formatLayoutSection', () => {
       '## Layout checks (measured in the page)',
       '- home / default / 390x844: 1 entry',
       '  - text-spill "Uploaded to the studio wins wall" testID=label at 0,0 320x20',
-      '  - capped on purpose: text-clamped "Costume checklist" at 0,40 200x40',
+      '  - capped (line clamp / ellipsis): text-clamped "Costume checklist" at 0,40 200x40',
       '- home / offline / 390x844: clean',
       `- home / empty / 390x844: not run (MISSING: ${path.join(artifactDir, 'home-empty-390x844.layout.json')} not written)`,
+    ].join('\n'));
+  });
+
+  it('shows a frame measured at the wrong width as not run, with both widths', () => {
+    const artifactDir = path.join(makeWorkDir(), 'frames');
+    const file = writeLayoutFile(artifactDir, frameFileName(HOME_TARGET), makeLayoutReport({
+      viewport: { width: 1280, height: 800 }, found: 1, entries: [SPILL_ENTRY],
+    }));
+
+    const section = formatLayoutSection(readLayoutChecks([HOME_TARGET], artifactDir, Date.now()));
+
+    expect(section).toBe([
+      '## Layout checks (measured in the page)',
+      `- home / default / 390x844: not run (MISMATCHED: ${file} measured at width 1280, but the frame is 390 wide)`,
     ].join('\n'));
   });
 

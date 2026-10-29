@@ -31,3 +31,10 @@ jobs:
     - name: Run tests
       run: npm test
       continue-on-error: true
+    - name: Install headless Chromium
+      if: matrix.node-version == '20.x'
+      run: npx playwright-core install --with-deps chromium-headless-shell
+
+    - name: Run layout snippet tests in headless Chromium
+      if: matrix.node-version == '20.x'
+      run: npm run test:chromium

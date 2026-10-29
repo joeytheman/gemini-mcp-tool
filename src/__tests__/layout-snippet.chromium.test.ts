@@ -48,7 +48,7 @@ async function measure(fixture: string, prepare?: (page: Page) => Promise<void>)
 }
 
 describe('LAYOUT_CHECK_SNIPPET in headless Chromium', () => {
-  it('reports nothing on a clean page, including chips inside a horizontal scroller', async () => {
+  it('reports nothing on a clean page, including a chip past the edge of a horizontal scroller', async () => {
     const report = await measure('clean.html');
 
     expect(report).toEqual({
@@ -58,6 +58,54 @@ describe('LAYOUT_CHECK_SNIPPET in headless Chromium', () => {
       entries: [],
       clamped: [],
     });
+  });
+
+  it('reports the chip past the edge once its row stops scrolling', async () => {
+    const report = await measure('clean.html', async (page) => {
+      await page.evaluate(() => { (document.querySelector('[data-testid="chips"]') as HTMLElement).style.overflowX = 'hidden'; });
+    });
+
+    expect(report.entries).toEqual([
+      { kind: 'text-clipped', text: 'Chip three', testID: 'chip-three', rect: { x: 300, y: 116, width: 150, height: 30 } },
+      { kind: 'control-offscreen', text: 'Chip three', testID: 'chip-three', rect: { x: 300, y: 116, width: 150, height: 30 } },
+    ]);
+  });
+
+  it('skips editable text, form fields, aria-hidden and inert subtrees, and controls that let taps through', async () => {
+    const report = await measure('skipped-elements.html');
+
+    expect(report.entries).toEqual([]);
+    expect(report.clamped).toEqual([]);
+  });
+
+  it.each([
+    ['contenteditable', '[data-testid="editable"]', 'contenteditable', [
+      { kind: 'text-clipped', text: 'Editable text that runs past the box', testID: 'editable' },
+    ]],
+    ['aria-hidden', '[data-case="aria-hidden"]', 'aria-hidden', [
+      { kind: 'text-clipped', text: 'Hidden text that runs past the box', testID: 'hidden-label' },
+      { kind: 'control-covered', text: 'Hidden', testID: 'hidden-button' },
+    ]],
+    ['inert', '[data-case="inert"]', 'inert', [
+      { kind: 'text-clipped', text: 'Inert text that runs past the box', testID: 'inert-label' },
+      { kind: 'control-covered', text: 'Inert', testID: 'inert-button' },
+    ]],
+  ])('reports what %s was hiding once it is removed', async (_label, selector, attribute, expected) => {
+    const report = await measure('skipped-elements.html', async (page) => {
+      await page.evaluate(([sel, attr]) => document.querySelector(sel)?.removeAttribute(attr), [selector, attribute]);
+    });
+
+    expect(report.entries.map(({ kind, text, testID }) => ({ kind, text, testID }))).toEqual(expected);
+  });
+
+  it('reports the pass-through control as covered once it takes pointer events', async () => {
+    const report = await measure('skipped-elements.html', async (page) => {
+      await page.evaluate(() => { (document.querySelector('[data-testid="passthrough"]') as HTMLElement).style.pointerEvents = 'auto'; });
+    });
+
+    expect(report.entries.map(({ kind, text, testID }) => ({ kind, text, testID }))).toEqual([
+      { kind: 'control-covered', text: 'Passthrough', testID: 'passthrough' },
+    ]);
   });
 
   it('reports a span that spills past its row', async () => {

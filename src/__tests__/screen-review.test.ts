@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
+import { execFileSync } from 'child_process';
 
 vi.mock('../utils/logger.js', () => ({
   Logger: { debug: vi.fn(), warn: vi.fn(), error: vi.fn(), log: vi.fn(), toolInvocation: vi.fn() },
@@ -171,34 +172,6 @@ describe('screenReviewArgsSchema', () => {
     }
   });
 
-  it('accepts a plain git ref as baseRef in review mode', () => {
-    const workDir = makeWorkDir();
-    const image = writeFile(workDir, 'home.png');
-
-    for (const baseRef of ['origin/main', 'main', 'HEAD~3', 'v2.2.0', '17b41c7', 'main@{1}']) {
-      const parsed = screenReviewArgsSchema.parse({
-        mode: 'review', instructions: 'i', workingDirectory: workDir, images: [image], baseRef,
-      });
-
-      expect(parsed.baseRef).toBe(baseRef);
-    }
-  });
-
-  it.each([
-    ['an option', '--output=/tmp/x'],
-    ['whitespace', 'origin/main extra'],
-    ['a shell substitution', '$(touch x)'],
-    ['a command separator', 'main;rm'],
-    ['an empty string', ''],
-  ])('rejects a baseRef that is %s', (_label, baseRef) => {
-    const workDir = makeWorkDir();
-    const image = writeFile(workDir, 'home.png');
-
-    expect(() => screenReviewArgsSchema.parse({
-      mode: 'review', instructions: 'i', workingDirectory: workDir, images: [image], baseRef,
-    })).toThrow(/baseRef is not a plain git ref/);
-  });
-
   it('rejects baseRef in plan mode', () => {
     const workDir = makeWorkDir();
     const route = writeFile(workDir, 'app/orders.tsx');
@@ -291,16 +264,16 @@ describe('buildScreenReviewPrompt', () => {
 });
 
 describe('buildScreenReviewPrompt: bounded reads', () => {
-  const ALLOWED = [
+  const SHARED = [
     'Read only the code the checklist needs as evidence, and only the lines you need:',
-    '- the rule files and READMEs the instructions cite;',
-    '- the board or design files the instructions name;',
-    '- the shared UI primitives a control uses or should use;',
-    '- the producer lines (serializers, services, hooks) behind a capability or viewer-scoped field the checklist asks about.',
+    '- the changed files listed above or named in the context;',
+    '- the producer lines (serializers, services, hooks) behind a capability or viewer-scoped field the checklist asks about;',
+    '- the rule files and READMEs the instructions cite, and the board or design files they name.',
   ];
   const BANNED = 'Never run tests, Jest, npm or any package script. Never read node_modules, release notes or changelog fragments. Never re-read the file the instructions came from: they are above, verbatim.';
+  const SHA = '0123456789abcdef0123456789abcdef01234567';
 
-  const review = (overrides: { baseRef?: string; changedRoutes?: string[] } = {}) =>
+  const review = (overrides: { mergeBase?: string; changedRoutes?: string[] } = {}) =>
     buildScreenReviewPrompt({ mode: 'review', instructions: 'i', images: ['/frames/a.png'], ...overrides });
   const plan = () => buildScreenReviewPrompt({ mode: 'plan', instructions: 'i', routeFile: '/work/app/orders.tsx' });
 
@@ -308,35 +281,35 @@ describe('buildScreenReviewPrompt: bounded reads', () => {
     const prompt = build();
 
     expect(prompt).toContain('## Reading code (bounded)');
-    for (const line of ALLOWED) {
+    for (const line of SHARED) {
       expect(prompt).toContain(line);
     }
     expect(prompt).toContain(BANNED);
   });
 
-  it('points review mode at the changed route files listed above it', () => {
+  it('lets review mode read the route file each image shows and what it renders, changed or not', () => {
+    expect(review()).toContain('- the route file each image shows, and the components and UI primitives it renders;');
+  });
+
+  it('lets plan mode read its own route file and what it renders', () => {
+    expect(plan()).toContain('- the route file above, and the components and UI primitives it renders;');
+  });
+
+  it('puts the changed files the reading rule points at above it', () => {
     const prompt = review({ changedRoutes: ['app/orders.tsx'] });
 
     expect(prompt.indexOf('## Changed files in this diff')).toBeLessThan(prompt.indexOf('## Reading code (bounded)'));
-    expect(prompt).toContain('- the changed route files listed above;');
   });
 
-  it('points review mode at the changed route files the context names when none were passed', () => {
-    expect(review()).toContain('- the changed route files the context names;');
-  });
+  it('allows only three-dot git diff and git show against the resolved merge base in review mode', () => {
+    const prompt = review({ mergeBase: SHA });
 
-  it('points plan mode at its own route file', () => {
-    expect(plan()).toContain('- the route file above;');
-  });
-
-  it('allows read-only git diff and git show against the baseRef in review mode', () => {
-    const prompt = review({ baseRef: 'origin/main' });
-
-    expect(prompt).toContain('Severity follows the diff: you may run read-only `git diff origin/main` (optionally `-- <path>`) and `git show origin/main:<path>` to see what changed. No other git command.');
+    expect(prompt).toContain(`The diff under review is ${SHA}...HEAD (${SHA} is the merge base of the caller's base ref and HEAD, resolved for you).`);
+    expect(prompt).toContain(`you may run read-only \`git diff ${SHA}...HEAD\`, optionally with \`--name-only\` and \`-- <paths>\`, and \`git show ${SHA}:<path>\`. No other git command.`);
     expect(prompt).not.toContain('Never run git.');
   });
 
-  it('allows no git in review mode without a baseRef, nor in plan mode', () => {
+  it('allows no git in review mode without a merge base, nor in plan mode', () => {
     expect(review()).toContain('Never run git.');
     expect(review()).not.toContain('git diff');
     expect(plan()).toContain('Never run git.');
@@ -344,7 +317,7 @@ describe('buildScreenReviewPrompt: bounded reads', () => {
   });
 
   it('keeps the image instruction ahead of any code reading', () => {
-    const prompt = review({ baseRef: 'origin/main' });
+    const prompt = review({ mergeBase: SHA });
 
     expect(prompt).toContain('Open every image below before reading any code. You are the second pair of eyes on frames someone else captured');
     expect(prompt.indexOf('Open every image below')).toBeLessThan(prompt.indexOf('## Reading code (bounded)'));
@@ -502,14 +475,49 @@ describe('screen-review execute', () => {
     expect(options.includeDirectories).toEqual([workDir, path.dirname(image)]);
   });
 
-  it('passes baseRef through to the prompt', async () => {
+  it('resolves baseRef to its merge base with HEAD and prints that commit', async () => {
     const workDir = makeWorkDir();
+    const git = (...args: string[]) => execFileSync('git', args, { cwd: workDir, encoding: 'utf-8' }).trim();
+    const commit = (message: string) => git('-c', 'user.email=t@example.com', '-c', 'user.name=t', 'commit', '--quiet', '--allow-empty', '-m', message);
+    git('init', '--quiet', '--initial-branch', 'main');
+    commit('base');
+    const mergeBase = git('rev-parse', 'HEAD');
+    git('checkout', '--quiet', '-b', 'feature');
+    commit('feature work');
+    git('checkout', '--quiet', 'main');
+    commit('main moved on');
+    git('checkout', '--quiet', 'feature');
     const image = writeFile(workDir, 'frames/home.png');
     mockExecuteAgyJson.mockResolvedValue(envelope(makeReviewResult({ screens: [makeScreen(image)] })));
 
-    await run({ mode: 'review', instructions: 'judge', workingDirectory: workDir, images: [image], baseRef: 'origin/main' });
+    await run({ mode: 'review', instructions: 'judge', workingDirectory: workDir, images: [image], baseRef: 'main' });
 
-    expect(mockExecuteAgyJson.mock.calls[0][0]).toContain('`git diff origin/main`');
+    expect(mockExecuteAgyJson.mock.calls[0][0]).toContain(`\`git diff ${mergeBase}...HEAD\``);
+  });
+
+  it.each([
+    ['an unknown ref', 'no-such-branch'],
+    ['an option-like ref', '--output=/tmp/screen-review-should-not-exist'],
+    ['a brace expansion that would spell options in a shell', '{-1..-2}'],
+  ])('fails before calling Gemini on %s', async (_label, baseRef) => {
+    const workDir = makeWorkDir();
+    execFileSync('git', ['init', '--quiet'], { cwd: workDir });
+    execFileSync('git', ['-c', 'user.email=t@example.com', '-c', 'user.name=t', 'commit', '--quiet', '--allow-empty', '-m', 'base'], { cwd: workDir });
+    const image = writeFile(workDir, 'frames/home.png');
+
+    await expect(run({ mode: 'review', instructions: 'judge', workingDirectory: workDir, images: [image], baseRef }))
+      .rejects.toThrow(`${ERROR_MESSAGES.SCREEN_REVIEW_BASE_REF}: '${baseRef}'. fatal: Not a valid object name ${baseRef}`);
+    expect(mockExecuteAgyJson).not.toHaveBeenCalled();
+    expect(fs.existsSync('/tmp/screen-review-should-not-exist')).toBe(false);
+  });
+
+  it('fails before calling Gemini when baseRef is given outside a git checkout', async () => {
+    const workDir = makeWorkDir();
+    const image = writeFile(workDir, 'frames/home.png');
+
+    await expect(run({ mode: 'review', instructions: 'judge', workingDirectory: workDir, images: [image], baseRef: 'main' }))
+      .rejects.toThrow(`${ERROR_MESSAGES.SCREEN_REVIEW_BASE_REF}: 'main'.`);
+    expect(mockExecuteAgyJson).not.toHaveBeenCalled();
   });
 
   it('rejects a working directory that does not exist', async () => {

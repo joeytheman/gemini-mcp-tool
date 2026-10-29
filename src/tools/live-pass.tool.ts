@@ -15,6 +15,7 @@ import {
 import { bulletList, section, renderUnparsableEnvelope, formatWorkingTreeSection, failWithWorkingTree } from '../utils/agyReport.js';
 import { isWithin, resolveWorkingDirectory, realpathOfExistingPrefix } from '../utils/fileReferences.js';
 import { snapshotWorkingTree, diffWorkingTree, type WorkingTreeDiff } from '../utils/gitStatusGuard.js';
+import { checkArtifactFile } from '../utils/artifactFile.js';
 import { readCheckout, type Checkout } from '../utils/gitCheckout.js';
 import { formatLayoutEntry, layoutFileName, readLayoutCheck, type LayoutCheck } from '../utils/layoutCheck.js';
 import { ERROR_MESSAGES, LAYOUT_CHECK_SNIPPET, LIVE_PASS, MODELS, MODEL_CHOICE_DESCRIPTION } from '../constants.js';
@@ -179,9 +180,9 @@ function renderTargets(targets: LivePassTarget[], artifactDir: string, driver: '
 }
 
 const PLAYWRIGHT_PROCEDURE = `Driver: the "${LIVE_PASS.PLAYWRIGHT_MCP_NAME}" MCP server.
-Start with browser_navigate to the entry URL the brief names. Never browser_navigate again, except to an entry URL the brief names or a reload the brief makes part of the path.
+browser_navigate goes only to a target's entry URL (where the brief says that target's user path starts) or reloads, meaning it navigates to the URL the page is already on, when the brief makes a reload part of the path. Any other URL in the brief is context, never a navigation target.
 For each target, in order:
-- Walk the user path to it from wherever the previous target left you.
+- Start from its entry URL when the brief gives it one; otherwise walk on from wherever the previous target left you.
 - Locate each control cheaply, in this order: a testID the brief names, as target [data-testid="<testID>"]; then browser_find with its visible label; then browser_snapshot with a target and a small depth scoped to that region. Never take a full-page snapshot just to look around, and never copy a snapshot or accessibility tree into your answer.
 - Native dialogs such as window.confirm and window.alert block the page: accept or dismiss each with browser_handle_dialog right after the click that opened it.
 - Wait until the marker the brief names for that state is present. Never screenshot a page that still shows a spinner or skeleton when a content state was requested.
@@ -291,7 +292,8 @@ Capture exactly these, use these exact screen / state / viewport strings in your
 ${renderTargets(targets, artifactDir, driver)}
 
 ## Served-branch check first
-Before any capture, confirm the running app is the build under test using the marker in the brief, compared with the checkout above. If you cannot confirm it, stop, set verdict BLOCKED, and explain in served_branch_check. Never report on an app you cannot identify.
+Before any capture, confirm the running app shows the served-branch marker the brief describes. If it does not, or you cannot find it, stop, set verdict BLOCKED, and explain in served_branch_check. Never report on an app you cannot identify.
+The checkout above is context. Set BLOCKED over it only when the marker names a branch or commit that contradicts it. A detached HEAD never contradicts a branch name, and a short commit hash matches the full one it begins.
 
 ## Evidence discipline
 - Open every PNG you saved and describe it in "observed". "observed" is what the image shows, not what you expected it to show.
@@ -343,19 +345,6 @@ export interface FramesValidation {
  */
 function frameAbsolutePath(file: string, artifactDir: string): string {
   return realpathOfExistingPrefix(path.isAbsolute(file) ? file : path.resolve(artifactDir, file));
-}
-
-function checkFrameFile(absFile: string, artifactDir: string, runStartMs: number): FrameStatus {
-  if (!isWithin(artifactDir, absFile)) return 'OUTSIDE';
-  try {
-    const stat = fs.statSync(absFile);
-    if (!stat.isFile()) return 'MISSING';
-    if (stat.size === 0) return 'EMPTY';
-    if (stat.mtimeMs < runStartMs - LIVE_PASS.FRESHNESS_TOLERANCE_MS) return 'STALE';
-    return 'OK';
-  } catch {
-    return 'MISSING';
-  }
 }
 
 function readManifestProblems(artifactDir: string, frameCount: number, runStartMs: number): string[] {
@@ -418,7 +407,7 @@ export function validateFrames(
     // targets — no evidence for either, however good the picture is.
     const status: FrameStatus = claimedBy.has(absFile)
       ? 'DUPLICATE'
-      : checkFrameFile(absFile, artifactDir, runStartMs);
+      : checkArtifactFile(absFile, artifactDir, runStartMs);
     claimedBy.add(absFile);
 
     const misnamed = Boolean(expectedName) && path.basename(absFile) !== expectedName;
@@ -595,6 +584,11 @@ export interface TargetLayoutCheck {
   check: LayoutCheck;
 }
 
+function viewportWidth(viewport: string): number | undefined {
+  const match = /^\s*(\d+)\s*x\s*\d+\s*$/i.exec(viewport);
+  return match ? Number(match[1]) : undefined;
+}
+
 /** Each web target's layout file, read from its prescribed path. Never throws. */
 export function readLayoutChecks(
   targets: LivePassTarget[],
@@ -604,7 +598,7 @@ export function readLayoutChecks(
   const files = prescribedLayoutFiles(targets, artifactDir);
   return targets.map(target => ({
     target,
-    check: readLayoutCheck(files.get(targetKey(target)) as string, artifactDir, runStartMs),
+    check: readLayoutCheck(files.get(targetKey(target)) as string, artifactDir, runStartMs, viewportWidth(target.viewport)),
   }));
 }
 
@@ -619,7 +613,7 @@ export function formatLayoutSection(checks: TargetLayoutCheck[]): string {
     return [
       `- ${label}: ${found} ${found === 1 ? 'entry' : 'entries'}${listed}`,
       ...entries.map(entry => `  - ${formatLayoutEntry(entry)}`),
-      ...clamped.map(entry => `  - capped on purpose: ${formatLayoutEntry(entry)}`),
+      ...clamped.map(entry => `  - capped (line clamp / ellipsis): ${formatLayoutEntry(entry)}`),
     ].join('\n');
   });
   return section('Layout checks (measured in the page)', lines.join('\n'));
