@@ -20,6 +20,12 @@ const cleanSnapshot = (root = '/repo') => ({
   truncated: false,
 });
 const mockSnapshotWorkingTree = vi.fn().mockReturnValue(cleanSnapshot());
+const mockCountAgyModelSteps = vi.fn(async (_conversationId: string): Promise<number | null> => null);
+vi.mock('../utils/agyModelSteps.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../utils/agyModelSteps.js')>();
+  return { ...actual, countAgyModelSteps: (id: string) => mockCountAgyModelSteps(id) };
+});
+
 vi.mock('../utils/gitStatusGuard.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../utils/gitStatusGuard.js')>();
   return { ...actual, snapshotWorkingTree: (...args: any[]) => mockSnapshotWorkingTree(...args) };
@@ -34,7 +40,6 @@ import {
   frameFileName,
   prescribedFrameNames,
   prescribedLayoutFiles,
-  formatTurnsPerFrame,
   formatLayoutSection,
   readLayoutChecks,
   validateFrames,
@@ -488,20 +493,6 @@ describe('prescribedLayoutFiles', () => {
       '/art/settings-profile-default-390x844.layout.json',
       '/art/settings-profile-default-390x844-2.layout.json',
     ]);
-  });
-});
-
-describe('formatTurnsPerFrame', () => {
-  it('divides the turn count by the reported frames, to one decimal', () => {
-    expect(formatTurnsPerFrame(81, 6)).toBe('Turns per frame: 13.5 (81 turns / 6 frames)');
-  });
-
-  it('reports n/a when no frame was reported', () => {
-    expect(formatTurnsPerFrame(12, 0)).toBe('Turns per frame: n/a (12 turns, no frames)');
-  });
-
-  it('reports ? when agy gave no turn count', () => {
-    expect(formatTurnsPerFrame(undefined, 3)).toBe('Turns per frame: ? (agy reported no turn count)');
   });
 });
 
@@ -1331,14 +1322,16 @@ describe('live-pass execute: checkout, turns and layout checks', () => {
     expect(mockExecuteAgyJson.mock.calls[0][0]).toContain("- Checkout under test: not a git checkout with a commit, so rely on the brief's marker alone.");
   });
 
-  it('prints turns per frame under the usage line', async () => {
+  it("prints Gemini's model steps per frame, read from agy's store for this conversation, under the usage line", async () => {
     const workDir = makeWorkDir();
     const artifactDir = path.join(workDir, '.live-pass', 'run1');
     passWithOneFrame(artifactDir);
+    mockCountAgyModelSteps.mockResolvedValueOnce(18);
 
     const report = await run({ targets: [HOME_TARGET], brief: 'b', driver: 'playwright', workingDirectory: workDir, artifactDir });
 
-    expect(report).toMatch(/\nUsage: 9 turns [^\n]*\n\nTurns per frame: 9 \(9 turns \/ 1 frames\)\n/);
+    expect(mockCountAgyModelSteps).toHaveBeenLastCalledWith('conv-abc');
+    expect(report).toMatch(/\nUsage: 9 turns [^\n]*\n\nGemini steps: 18 \(18 per frame, 1 frame\)\n/);
   });
 
   it('prints the quoted link source under a frame that began at a link the user arrives by', async () => {

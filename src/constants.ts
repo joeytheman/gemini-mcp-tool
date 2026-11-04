@@ -44,6 +44,10 @@ export const AGY_INTERNAL = {
   TRANSCRIPT_FINAL: { type: "PLANNER_RESPONSE", source: "MODEL", status: "DONE" },
   TIMEOUT_SENTINEL: "Error: timed out waiting for response",
   DISABLE_RECOVERY_ENV: "AGY_DISABLE_TRANSCRIPT_RECOVERY",
+  // agy 1.4.12 keeps each conversation's steps in SQLite; step_type 15 is a model step.
+  CONVERSATIONS_DIR: "conversations",
+  CONVERSATION_STORE_EXT: ".db",
+  MODEL_STEP_TYPE: 15,
 } as const;
 
 // Status messages

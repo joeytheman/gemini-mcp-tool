@@ -14,6 +14,7 @@ import { bulletList, section, renderUnparsableEnvelope, formatWorkingTreeSection
 import { isWithin, resolveWorkingDirectory, realpathOfExistingPrefix } from '../utils/fileReferences.js';
 import { snapshotWorkingTree, diffWorkingTree, type WorkingTreeDiff } from '../utils/gitStatusGuard.js';
 import { resolveMergeBase } from '../utils/gitCheckout.js';
+import { countAgyModelSteps, formatModelSteps } from '../utils/agyModelSteps.js';
 import { ERROR_MESSAGES, LIVE_PASS, MODELS, MODEL_CHOICE_DESCRIPTION } from '../constants.js';
 
 const IMAGE_EXTENSIONS = /\.(png|jpe?g)$/i;
@@ -335,6 +336,7 @@ export function formatScreenReviewReport(input: {
   decision: ReviewDecision;
   deniedActions: string;
   workingTree: WorkingTreeDiff;
+  modelSteps: number | null;
 }): string {
   const { envelope, result, decision } = input;
   const headline = decision.verdict === decision.reported
@@ -345,6 +347,7 @@ export function formatScreenReviewReport(input: {
   if (envelope.conversation_id) parts.push(formatConversationLine(envelope.conversation_id));
   parts.push(headline);
   parts.push(formatAgyUsageLine(envelope));
+  parts.push(formatModelSteps(input.modelSteps));
   parts.push(section('Why', bulletList(decision.reasons)));
 
   if (decision.coverage.length > 0) {
@@ -536,6 +539,7 @@ export const screenReviewTool: UnifiedTool = {
       decision: deriveReviewVerdict(parsed.data, input.images ?? [], input.changedRoutes ?? []),
       deniedActions,
       workingTree,
+      modelSteps: envelope.conversation_id ? await countAgyModelSteps(envelope.conversation_id) : null,
     });
   },
 };

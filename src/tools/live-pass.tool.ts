@@ -18,6 +18,7 @@ import { snapshotWorkingTree, diffWorkingTree, type WorkingTreeDiff } from '../u
 import { checkArtifactFile } from '../utils/artifactFile.js';
 import { readCheckout, type Checkout } from '../utils/gitCheckout.js';
 import { formatLayoutEntry, layoutFileName, readLayoutCheck, type LayoutCheck } from '../utils/layoutCheck.js';
+import { countAgyModelSteps, formatModelSteps } from '../utils/agyModelSteps.js';
 import { ERROR_MESSAGES, LAYOUT_CHECK_SNIPPET, LIVE_PASS, MODELS, MODEL_CHOICE_DESCRIPTION } from '../constants.js';
 
 const execFileAsync = promisify(execFile);
@@ -576,13 +577,6 @@ export async function runPublishCommand(
 
 // ------------------------------------------------------------------ report
 
-export function formatTurnsPerFrame(numTurns: number | undefined, frameCount: number): string {
-  if (numTurns === undefined) return 'Turns per frame: ? (agy reported no turn count)';
-  if (frameCount === 0) return `Turns per frame: n/a (${numTurns} turns, no frames)`;
-  const perFrame = Math.round((numTurns / frameCount) * 10) / 10;
-  return `Turns per frame: ${perFrame} (${numTurns} turns / ${frameCount} frames)`;
-}
-
 export interface TargetLayoutCheck {
   target: LivePassTarget;
   check: LayoutCheck;
@@ -638,6 +632,7 @@ export function formatLivePassReport(input: {
   deniedActions: string;
   workingTree: WorkingTreeDiff;
   publish: PublishResult;
+  modelSteps: number | null;
   /** Web passes only. Reported for the caller to judge; never an input to the verdict. */
   layoutChecks?: TargetLayoutCheck[];
 }): string {
@@ -653,7 +648,7 @@ export function formatLivePassReport(input: {
   parts.push(headline);
   parts.push(`driver: ${driver} · model: ${model} · artifacts: ${artifactDir}`);
   parts.push(formatAgyUsageLine(envelope));
-  parts.push(formatTurnsPerFrame(envelope.num_turns, result.frames.length));
+  parts.push(formatModelSteps(input.modelSteps, result.frames.length));
   parts.push(section('Why', bulletList(decision.reasons)));
   parts.push(section('Served-branch check', result.served_branch_check || '- not reported'));
   parts.push(section('Summary', result.summary || '- not reported'));
@@ -827,6 +822,7 @@ export const livePassTool: UnifiedTool = {
       deniedActions,
       workingTree,
       publish,
+      modelSteps: envelope.conversation_id ? await countAgyModelSteps(envelope.conversation_id) : null,
       layoutChecks: input.driver === 'playwright'
         ? readLayoutChecks(input.targets, artifactDir, runStartMs)
         : undefined,
