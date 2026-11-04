@@ -58,7 +58,7 @@ describe('Gemini MCP Server', () => {
 
       const [serverConfig] = serverConstructorCalls[0];
       expect(serverConfig).toHaveProperty('name', 'gemini-mcp');
-      expect(packageVersion).toBe('2.2.0');
+      expect(packageVersion).toBe('2.3.0');
       expect(serverConfig).toHaveProperty('version', packageVersion);
     });
 
