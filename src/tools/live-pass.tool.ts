@@ -174,7 +174,6 @@ export interface TargetFiles {
   layout: string;
 }
 
-/** Every absolute path a target's evidence uses, keyed by target: its frame and the capture and layout files beside it. */
 export function prescribedTargetFiles(targets: LivePassTarget[], artifactDir: string): Map<string, TargetFiles> {
   const files = new Map<string, TargetFiles>();
   for (const [key, frameName] of prescribedFrameNames(targets)) {
@@ -228,10 +227,9 @@ For each target, in order:
 - Locate each control cheaply, in this order: a testID the brief names, as target [data-testid="<testID>"]; then browser_find with its visible label; then browser_snapshot with a target and a small depth scoped to that region. Never take a full-page snapshot just to look around, and never copy a snapshot or accessibility tree into your answer.
 - Native dialogs such as window.confirm and window.alert block the page: accept or dismiss each with browser_handle_dialog right after the click that opened it.
 - Wait until the marker the brief names for that state is present. Never capture a page that still shows a spinner or skeleton when a content state was requested.
-- Capture it: browser_run_code_unsafe with filename set to the exact absolute path printed as "capture:" for that target below. Never pass code, never write, edit or read a capture file, and never reuse another target's file. The capture sets the target's viewport, grows it to the full height of a scrolling screen, saves the screenshot to that target's "file:" path, measures the layout, and restores the viewport. It answers "saved <file> at <width>x<height>"; an added "; layout not measured: <error>" still saved the frame.
+- Capture it: browser_run_code_unsafe with filename set to the exact absolute path printed as "capture:" for that target below. Never pass code, never write, edit or read a capture file, and never reuse another target's file. The capture sets the target's viewport, grows it taller until the screen's scroll area fits, up to ${LIVE_PASS.CAPTURE_MAX_HEIGHT} px, saves the screenshot to that target's "file:" path, measures the layout, and restores the viewport. It answers "saved <file> at <width>x<height>"; an added "; layout not measured: <error>" still saved the frame.
 - Right after it, save the layout check: browser_evaluate with function set to the "save layout:" function printed for that target, copied verbatim, and filename set to the exact absolute path printed as "layout:" for that target. Do not open that file or report on it: the caller reads it.
 - If a capture returns an error, add the target to "skipped" with the error text. Never fall back to browser_take_screenshot.
-- Capture centred/terminal states and sheets at 390x844 and again at 320x568 when the targets ask for both.
 - Scroll a virtualized list to its end before asserting that something is absent.
 - browser_evaluate runs only the "save layout:" functions and browser_run_code_unsafe only the "capture:" files. Neither is used to click, type, navigate, or set storage, cookies or app state.`;
 

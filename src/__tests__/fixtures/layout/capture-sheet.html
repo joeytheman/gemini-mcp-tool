@@ -1,0 +1,8 @@
+<!doctype html><html><head><meta charset="utf-8"><style>html,body,#root{margin:0;height:100%}body{overflow:hidden;font:16px/20px sans-serif}#root{display:flex;flex-direction:column}header{flex-shrink:0;height:60px}h1{margin:0;font-size:24px;line-height:60px}.scroll{flex:1;overflow-y:auto}.row{padding:14px 16px}.row span{display:block;line-height:20px}[role=tablist]{flex-shrink:0;height:50px;display:flex}[role=tab]{flex:1}.sheet{position:fixed;left:0;right:0;bottom:0;height:300px;background:#fff}.sheet p{margin:0;padding:16px}</style></head><body><div id="root">
+  <header><h1>Dances</h1></header>
+  <div class="scroll" data-testid="dance-list"></div>
+  <div role="tablist"><div role="tab">Today</div><div role="tab">Dances</div><div role="tab">Comps</div></div>
+</div>
+<div class="sheet" role="dialog" aria-modal="true"><p>Add a dance</p><p>Pick a competition</p></div>
+<script>document.querySelector('[data-testid="dance-list"]').innerHTML = Array.from({ length: 30 }, (_, i) => `<div class="row"><span>Row ${i + 1}</span></div>`).join('');</script>
+</body></html>

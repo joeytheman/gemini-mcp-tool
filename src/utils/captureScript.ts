@@ -5,16 +5,24 @@ export interface Viewport {
   height: number;
 }
 
-export const CONTENT_BOTTOM_SNIPPET = `() => {
-    const skip = (el) => el.closest('[aria-hidden="true"]') || el.closest('[role="tab"]');
-    let bottom = 0;
-    for (const el of document.querySelectorAll('body *')) {
-      if (skip(el)) continue;
-      const hasText = Array.from(el.childNodes).some((n) => n.nodeType === 3 && n.textContent.trim());
-      if (!hasText) continue;
-      bottom = Math.max(bottom, el.getBoundingClientRect().bottom + window.scrollY);
+/**
+ * With a shown aria-modal sheet open, only the scrollers inside it count, so a
+ * sheet over a long screen is still shot at the viewport. `shown` and the modal
+ * lookup match src/layout-check.snippet.js, so both agree on which sheet counts.
+ */
+export const SCROLL_OVERFLOW_SNIPPET = `() => {
+    const shown = (el) => {
+      const r = el.getBoundingClientRect();
+      return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden' && !el.closest('[aria-hidden="true"],[inert]');
+    };
+    const scrolls = (el) => el.tagName !== 'TEXTAREA' && /^(auto|scroll)$/.test(getComputedStyle(el).overflowY) && shown(el);
+    const modal = [...document.querySelectorAll('[aria-modal="true"]')].find(shown);
+    let overflow = modal ? 0 : document.scrollingElement.scrollHeight - innerHeight;
+    for (const el of modal ? [modal, ...modal.querySelectorAll('*')] : document.querySelectorAll('*')) {
+      const extra = el.scrollHeight - el.clientHeight;
+      if (extra > overflow && scrolls(el)) overflow = extra;
     }
-    return bottom;
+    return overflow;
   }`;
 
 export function parseViewport(viewport: string): Viewport | null {
@@ -22,7 +30,6 @@ export function parseViewport(viewport: string): Viewport | null {
   return match ? { width: Number(match[1]), height: Number(match[2]) } : null;
 }
 
-/** The function Gemini passes to browser_evaluate, with filename set, to save one frame's layout report. */
 export function saveLayoutFunction(key: string): string {
   return `() => window.__livePassLayout?.[${JSON.stringify(key)}]`;
 }
@@ -37,20 +44,23 @@ export function buildCaptureScript(config: { viewport: Viewport; frameFile: stri
   const capture = JSON.stringify({
     ...config,
     settleMs: LIVE_PASS.CAPTURE_SETTLE_MS,
-    padPx: LIVE_PASS.CAPTURE_BOTTOM_PAD_PX,
+    maxHeight: Math.max(LIVE_PASS.CAPTURE_MAX_HEIGHT, config.viewport.height),
   });
   return `async (page) => {
-  const { viewport, frameFile, key, settleMs, padPx } = ${capture};
+  const { viewport, frameFile, key, settleMs, maxHeight } = ${capture};
   const settle = () => new Promise((resolve) => setTimeout(resolve, settleMs));
+  const overflow = () => page.evaluate(${SCROLL_OVERFLOW_SNIPPET});
+  let height = viewport.height;
   await page.setViewportSize(viewport);
   await settle();
   try {
-    const bottom = await page.evaluate(${CONTENT_BOTTOM_SNIPPET});
-    let height = viewport.height;
-    if (bottom > viewport.height) {
-      height = Math.ceil(bottom + padPx);
+    for (let grown = 0, last = Infinity; grown < 2 && height < maxHeight; grown++) {
+      const by = await overflow();
+      if (by <= 1 || by >= last) break;
+      height = Math.min(height + Math.ceil(by), maxHeight);
       await page.setViewportSize({ width: viewport.width, height });
       await settle();
+      last = by;
     }
     await page.screenshot({ path: frameFile, type: 'png', scale: 'css' });
     const saved = 'saved ' + frameFile + ' at ' + viewport.width + 'x' + height;

@@ -52,7 +52,7 @@ import {
 } from '../tools/live-pass.tool.js';
 import { ERROR_MESSAGES, LAYOUT_CHECK_SNIPPET, LIVE_PASS, MODELS } from '../constants.js';
 import { readLayoutCheck, type LayoutReport } from '../utils/layoutCheck.js';
-import { buildCaptureScript, CONTENT_BOTTOM_SNIPPET } from '../utils/captureScript.js';
+import { buildCaptureScript, SCROLL_OVERFLOW_SNIPPET } from '../utils/captureScript.js';
 import { makeTempDir, cleanupTempDirs } from './utils/test-helpers.js';
 
 // ------------------------------------------------------------------ helpers
@@ -299,8 +299,11 @@ describe('buildLivePassPrompt', () => {
     expect(prompt).toContain('Capture it: browser_run_code_unsafe with filename set to the exact absolute path printed as "capture:" for that target below. Never pass code, never write, edit or read a capture file');
     expect(prompt).toContain('/work/tree/.live-pass/run1');
     expect(prompt).toContain('If a capture returns an error, add the target to "skipped" with the error text. Never fall back to browser_take_screenshot.');
+    expect(prompt).toContain('The capture sets the target\'s viewport, grows it taller until the screen\'s scroll area fits, up to 4000 px, saves the screenshot to that target\'s "file:" path');
+    expect(prompt).not.toContain('full height');
     expect(prompt).not.toContain('browser_resize');
     expect(prompt).not.toContain('fullPage');
+    expect(prompt).not.toContain('320x568');
     expect(prompt).toContain('answer is ONLY the schema JSON');
     expect(prompt).toContain('a spinner, blank page, skeleton, error, or the wrong screen is a FAIL');
     expect(prompt).toContain('PASSES when it shows that state with everything "expected" names');
@@ -499,7 +502,7 @@ describe('buildLivePassPrompt: context Gemini used to dig for', () => {
     ].join('\n'));
     expect(prompt).toContain('browser_evaluate with function set to the "save layout:" function printed for that target, copied verbatim, and filename set to the exact absolute path printed as "layout:" for that target. Do not open that file or report on it');
     expect(prompt).not.toContain(LAYOUT_CHECK_SNIPPET);
-    expect(prompt).not.toContain(CONTENT_BOTTOM_SNIPPET);
+    expect(prompt).not.toContain(SCROLL_OVERFLOW_SNIPPET);
     expect(prompt).not.toContain('getBoundingClientRect');
   });
 
@@ -509,7 +512,7 @@ describe('buildLivePassPrompt: context Gemini used to dig for', () => {
     expect(prompt).not.toContain('capture:');
     expect(prompt).not.toContain('layout:');
     expect(prompt).not.toContain(LAYOUT_CHECK_SNIPPET);
-    expect(prompt).not.toContain(CONTENT_BOTTOM_SNIPPET);
+    expect(prompt).not.toContain(SCROLL_OVERFLOW_SNIPPET);
   });
 });
 

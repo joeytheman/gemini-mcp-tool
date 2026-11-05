@@ -101,11 +101,17 @@ async function capture(viewport: string, artifactDir = makeTempDir('capture')) {
 
 describe('capture script in headless Chromium, run as browser_run_code_unsafe runs it', () => {
   it.each([
-    ['a page that fits', 'capture-fits.html', '390x844', 844],
-    ['a page whose last text ends within 24 px of the bottom edge', 'capture-near-bottom.html', '390x844', 844],
-    ['an RN-web screen with a fixed header, an inner scroller and a tab bar', 'capture-rn-web.html', '390x844', 1524],
-    ['a flex-grow centred screen 12 px taller than 568', 'capture-centred.html', '320x568', 604],
-    ['a screen 12 px taller than 568 with a bottom-anchored toast', 'capture-toast.html', '320x568', 604],
+    ['a page that fits beside an overflowing textarea and aria-hidden and inert scrollers', 'capture-fits.html', '390x844', 844],
+    ['a page whose content ends 14 px above the bottom edge', 'capture-near-bottom.html', '390x844', 844],
+    ['a page 1 px taller than the viewport, inside the rounding guard', 'capture-one-px.html', '390x844', 844],
+    ['an RN-web screen with a fixed header, an inner scroller of tight text rows and a tab bar', 'capture-rn-web.html', '390x844', 1550],
+    ['a flex-grow centred screen 12 px taller than 568', 'capture-centred.html', '320x568', 580],
+    ['a screen 12 px taller than 568 with a bottom-anchored toast', 'capture-toast.html', '320x568', 580],
+    ['an aria-modal sheet over a tall list', 'capture-sheet.html', '320x568', 568],
+    ['two side-by-side scrollers, grown by the larger overflow only', 'capture-two-columns.html', '390x844', 1344],
+    ['a list taller than the height cap', 'capture-tall-list.html', '390x844', 4000],
+    ['a fixed-height inner scroller, which stops growing after one re-check', 'capture-fixed-scroller.html', '390x844', 1544],
+    ['a scroller sharing its growth with a flex panel, grown once more by what remained', 'capture-shared-flex.html', '390x844', 1711],
   ])('captures %s at its known height and leaves the viewport at the target size', async (_label, fixture, viewport, shotHeight) => {
     const { width, height } = parseViewport(viewport) as Viewport;
     await open(fixture);
@@ -136,18 +142,30 @@ describe('capture script in headless Chromium, run as browser_run_code_unsafe ru
     await open('capture-rn-web.html');
 
     const shot = await capture('390x844');
-    await page.setViewportSize({ width: 390, height: 1524 });
+    await page.setViewportSize({ width: 390, height: 1550 });
     const direct = await page.evaluate((expression) => eval(`(${expression})`)(), LAYOUT_CHECK_SNIPPET);
 
-    expect(shot.layout.report?.viewport).toEqual({ width: 390, height: 1524 });
+    expect(shot.layout.report?.viewport).toEqual({ width: 390, height: 1550 });
     expect(shot.layout.report).toEqual(direct);
+  });
+
+  it('shoots a pre-scrolled inner list at its full height from its first row', async () => {
+    await open('capture-rn-web.html');
+    const scrollTop = () => page.evaluate(() => (document.querySelector('[data-testid="dance-list"]') as HTMLElement).scrollTop);
+    await page.evaluate(() => { (document.querySelector('[data-testid="dance-list"]') as HTMLElement).scrollTop = 500; });
+    expect(await scrollTop()).toBe(500);
+
+    const shot = await capture('390x844');
+
+    expect(pngSize(shot.frameFile)).toEqual({ width: 390, height: 1550 });
+    expect(await scrollTop()).toBe(0);
   });
 
   it('still saves the frame and restores the viewport when the layout step throws, and leaves no earlier report behind', async () => {
     await open('capture-fits.html');
     await page.evaluate(() => {
       (window as unknown as { __livePassLayout: object }).__livePassLayout = { 'screen-state-390x844.png': { earlier: true } };
-      window.getComputedStyle = () => { throw new Error('layout boom'); };
+      document.createRange = () => { throw new Error('layout boom'); };
     });
 
     const shot = await capture('390x844');

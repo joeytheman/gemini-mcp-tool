@@ -92,7 +92,8 @@ export const LIVE_PASS = {
   CAPTURE_FILE_SUFFIX: ".capture.js",
   // React Native Web lays out again asynchronously after a viewport resize.
   CAPTURE_SETTLE_MS: 1000,
-  CAPTURE_BOTTOM_PAD_PX: 24,
+  // A virtualized list's tail spacer can report a scrollHeight far past its rows.
+  CAPTURE_MAX_HEIGHT: 4000,
   LAYOUT_CHECK_ID: "layout-check/1",
   LAYOUT_MAX_ENTRIES: 50,
   LAYOUT_TEXT_CHARS: 80,

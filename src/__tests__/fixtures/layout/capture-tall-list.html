@@ -1,0 +1,6 @@
+<!doctype html><html><head><meta charset="utf-8"><style>html,body,#root{margin:0;height:100%}body{overflow:hidden;font:16px/20px sans-serif}#root{display:flex;flex-direction:column}header{flex-shrink:0;height:60px}h1{margin:0;font-size:24px;line-height:60px}.scroll{flex:1;overflow-y:auto}.row{padding:14px 16px}.row span{display:block;line-height:20px}[role=tablist]{flex-shrink:0;height:50px;display:flex}[role=tab]{flex:1}</style></head><body><div id="root">
+  <header><h1>Results</h1></header>
+  <div class="scroll" data-testid="results-list"></div>
+  <div role="tablist"><div role="tab">Today</div><div role="tab">Dances</div><div role="tab">Comps</div></div>
+</div><script>document.querySelector('[data-testid="results-list"]').innerHTML = Array.from({ length: 200 }, (_, i) => `<div class="row"><span>Row ${i + 1}</span></div>`).join('');</script>
+</body></html>
