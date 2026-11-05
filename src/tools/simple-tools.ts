@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { UnifiedTool } from './registry.js';
 import { executeCommand } from '../utils/commandExecutor.js';
+import { AGY_LIMITS } from '../constants.js';
 
 const pingArgsSchema = z.object({
   prompt: z.string().default('').describe("Message to echo "),
@@ -42,7 +43,10 @@ export const helpTool: UnifiedTool = {
     readOnlyHint: true,
     openWorldHint: true,
   },
-  execute: async (args, onProgress) => {
-    return executeCommand("agy", ["--help"], onProgress);
+  execute: async (args, onProgress, signal) => {
+    return executeCommand("agy", ["--help"], onProgress, undefined, {
+      killAfterMs: AGY_LIMITS.DEFAULT_CEILING_MS,
+      signal,
+    });
   }
 };

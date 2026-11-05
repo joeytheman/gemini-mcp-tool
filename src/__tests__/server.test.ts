@@ -1,5 +1,6 @@
-import { describe, it, expect, vi, beforeAll } from 'vitest';
+import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
+import { CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 
 const packageVersion = JSON.parse(
   readFileSync(new URL('../../package.json', import.meta.url), 'utf8')
@@ -80,6 +81,46 @@ describe('Gemini MCP Server', () => {
     it('should support progress notifications', () => {
       expect(mockServerInstance).toHaveProperty('notification');
       expect(typeof mockServerInstance.notification).toBe('function');
+    });
+  });
+
+  describe('Final progress notification', () => {
+    function callTool(signal: AbortSignal) {
+      const [, handler] = setRequestHandlerCalls.find(([schema]) => schema === CallToolRequestSchema)!;
+      return handler(
+        { method: 'tools/call', params: { name: 'ping', arguments: { prompt: 'hi' }, _meta: { progressToken: 'tok-final' } } },
+        { signal }
+      );
+    }
+
+    function finalNotifications() {
+      return mockServerInstance.notification.mock.calls
+        .map(([notification]: any[]) => notification.params)
+        .filter((params: any) => params.progressToken === 'tok-final' && params.progress === 100);
+    }
+
+    beforeEach(() => {
+      mockServerInstance.notification.mockClear();
+    });
+
+    it('sends a completed notification when the call succeeds', async () => {
+      const result = await callTool(new AbortController().signal);
+
+      expect(result.isError).toBe(false);
+      expect(finalNotifications()).toEqual([
+        expect.objectContaining({ message: '✅ ping completed successfully' }),
+      ]);
+    });
+
+    it('sends no final notification when the request is cancelled before the tool returns', async () => {
+      const controller = new AbortController();
+      const pending = callTool(controller.signal);
+      controller.abort();
+
+      const result = await pending;
+
+      expect(result.isError).toBe(false);
+      expect(finalNotifications()).toEqual([]);
     });
   });
 

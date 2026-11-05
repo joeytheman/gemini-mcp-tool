@@ -141,7 +141,7 @@ export const brainstormTool: UnifiedTool = {
     readOnlyHint: true,
     openWorldHint: true,
   },
-  execute: async (args, onProgress) => {
+  execute: async (args, onProgress, signal) => {
     const {
       prompt,
       model,
@@ -181,6 +181,7 @@ export const brainstormTool: UnifiedTool = {
         sandbox: false,
         changeMode: false,
         cwd: workingDirectory as string | undefined,
+        signal,
       },
       onProgress
     );

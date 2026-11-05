@@ -6,6 +6,7 @@ vi.mock('../utils/commandExecutor.js', () => ({
 }));
 
 import { helpTool, pingTool } from '../tools/simple-tools.js';
+import { AGY_LIMITS } from '../constants.js';
 
 describe('simple tools', () => {
   beforeEach(() => {
@@ -13,11 +14,16 @@ describe('simple tools', () => {
     mockExecuteCommand.mockResolvedValue('help output');
   });
 
-  it('Help should call agy help', async () => {
-    const result = await helpTool.execute({});
+  it('Help should call agy help under the default ceiling and the request signal', async () => {
+    const controller = new AbortController();
+
+    const result = await helpTool.execute({}, undefined, controller.signal);
 
     expect(result).toBe('help output');
-    expect(mockExecuteCommand).toHaveBeenCalledWith('agy', ['--help'], undefined);
+    expect(mockExecuteCommand).toHaveBeenCalledWith('agy', ['--help'], undefined, undefined, {
+      killAfterMs: AGY_LIMITS.DEFAULT_CEILING_MS,
+      signal: controller.signal,
+    });
   });
 
   it('ping should return directly without spawning a shell command', async () => {

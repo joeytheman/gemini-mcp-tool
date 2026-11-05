@@ -34,7 +34,7 @@ export interface UnifiedTool {
     }>;
   };
 
-  execute: (args: ToolArguments, onProgress?: (newOutput: string) => void) => Promise<string>;
+  execute: (args: ToolArguments, onProgress?: (newOutput: string) => void, signal?: AbortSignal) => Promise<string>;
   category?: 'simple' | 'gemini' | 'utility';
   /** MCP tool annotations for AI assistants */
   annotations?: ToolAnnotations;
@@ -91,10 +91,15 @@ export function formatZodIssues(error: ZodError): string[] {
   return error.issues.map(issue => `${issue.path.join('.')}: ${issue.message}`);
 }
 
-export async function executeTool(toolName: string, args: ToolArguments, onProgress?: (newOutput: string) => void): Promise<string> {
+export async function executeTool(
+  toolName: string,
+  args: ToolArguments,
+  onProgress?: (newOutput: string) => void,
+  signal?: AbortSignal
+): Promise<string> {
   const tool = toolRegistry.find(t => t.name === toolName);
   if (!tool) { throw new Error(`Unknown tool: ${toolName}`); } try { const validatedArgs = tool.zodSchema.parse(args) as ToolArguments;
-    return tool.execute(validatedArgs, onProgress);
+    return tool.execute(validatedArgs, onProgress, signal);
   } catch (error) { if (error instanceof ZodError) {
       throw new Error(`Invalid arguments for ${toolName}: ${formatZodIssues(error).join(', ')}`);
     }
