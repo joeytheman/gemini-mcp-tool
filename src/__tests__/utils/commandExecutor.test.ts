@@ -22,6 +22,7 @@ vi.mock('child_process', () => ({
 
 // Import after mocks are set up
 import { executeCommand } from '../../utils/commandExecutor.js';
+import { Logger } from '../../utils/logger.js';
 import { AGY_LIMITS, ERROR_MESSAGES } from '../../constants.js';
 
 function createMockChildProcess() {
@@ -269,6 +270,21 @@ describe('executeCommand limits', () => {
 
     await rejection;
     expect(mockProc.kill.mock.calls).toEqual([['SIGTERM']]);
+  });
+
+  it('records completion when a stopped run finally closes, so its args are not retained', async () => {
+    const mockProc = createMockChildProcess();
+    mockSpawn.mockReturnValue(mockProc);
+
+    const promise = executeCommand('agy', [], undefined, undefined, { killAfterMs: 5000 });
+    const rejection = expect(promise).rejects.toThrow(ERROR_MESSAGES.AGY_HUNG);
+    vi.advanceTimersByTime(5000);
+    await rejection;
+    expect(Logger.commandComplete).not.toHaveBeenCalled();
+
+    mockProc.emit('close', null);
+
+    expect(Logger.commandComplete).toHaveBeenCalledWith(expect.any(Number), null);
   });
 
   it('never stops a run that finished before its limit, and leaves no timer behind', async () => {

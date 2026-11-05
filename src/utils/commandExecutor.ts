@@ -118,28 +118,31 @@ export async function executeCommand(
       }
     });
     childProcess.on("close", (code) => {
-      if (!isResolved) {
-        settle();
-        // Join array buffers efficiently
-        const stdout = stdoutChunks.join('');
-        const stderr = stderrChunks.join('');
+      if (isResolved) {
+        // Stopped or failed earlier: record the exit so the logger drops this command's args.
+        Logger.commandComplete(startTime, code);
+        return;
+      }
+      settle();
+      // Join array buffers efficiently
+      const stdout = stdoutChunks.join('');
+      const stderr = stderrChunks.join('');
 
-        // Treat an exit-0 run as failed only when it reported quota exhaustion
-        // AND produced no usable stdout — so a quota error with empty output is
-        // surfaced (not silently "recovered"), while a run that still returned a
-        // real answer is kept.
-        const quotaFailure = resourceExhausted && stdout.trim() === "";
-        if (code === 0 && !quotaFailure) {
-          Logger.commandComplete(startTime, code, stdout.length);
-          resolve(stdout.trim());
-        } else {
-          Logger.commandComplete(startTime, code);
-          Logger.error(`Failed with exit code ${code}`);
-          const errorMessage = stderr.trim() || (resourceExhausted ? "RESOURCE_EXHAUSTED" : "Unknown error");
-          reject(
-            new Error(`Command failed with exit code ${code}: ${errorMessage}`),
-          );
-        }
+      // Treat an exit-0 run as failed only when it reported quota exhaustion
+      // AND produced no usable stdout — so a quota error with empty output is
+      // surfaced (not silently "recovered"), while a run that still returned a
+      // real answer is kept.
+      const quotaFailure = resourceExhausted && stdout.trim() === "";
+      if (code === 0 && !quotaFailure) {
+        Logger.commandComplete(startTime, code, stdout.length);
+        resolve(stdout.trim());
+      } else {
+        Logger.commandComplete(startTime, code);
+        Logger.error(`Failed with exit code ${code}`);
+        const errorMessage = stderr.trim() || (resourceExhausted ? "RESOURCE_EXHAUSTED" : "Unknown error");
+        reject(
+          new Error(`Command failed with exit code ${code}: ${errorMessage}`),
+        );
       }
     });
   });
