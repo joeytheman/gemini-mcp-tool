@@ -1483,6 +1483,19 @@ describe('live-pass execute: checkout, turns and layout checks', () => {
     }
   });
 
+  it('replaces a symlink at a capture path with a regular file, leaving the link\'s target untouched', () => {
+    const artifactDir = makeWorkDir();
+    const outside = path.join(makeWorkDir(), 'victim.txt');
+    fs.writeFileSync(outside, 'keep me');
+    const capture = path.join(artifactDir, 'home-default-390x844.capture.js');
+    fs.symlinkSync(outside, capture);
+
+    writeCaptureScripts([HOME_TARGET], artifactDir);
+
+    expect(fs.readFileSync(outside, 'utf-8')).toBe('keep me');
+    expect(fs.lstatSync(capture).isFile()).toBe(true);
+  });
+
   it('writes no capture script for a maestro pass', async () => {
     const workDir = makeWorkDir();
     const artifactDir = path.join(workDir, '.live-pass', 'run1');

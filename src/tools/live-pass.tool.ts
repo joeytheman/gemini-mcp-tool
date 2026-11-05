@@ -194,7 +194,8 @@ export function writeCaptureScripts(targets: LivePassTarget[], artifactDir: stri
     const viewport = parseViewport(target.viewport);
     if (!viewport) throw new Error(webViewportError(target.viewport));
     const { frameName, frame, capture } = files.get(targetKey(target)) as TargetFiles;
-    fs.writeFileSync(capture, buildCaptureScript({ viewport, frameFile: frame, key: frameName }));
+    fs.rmSync(capture, { force: true });
+    fs.writeFileSync(capture, buildCaptureScript({ viewport, frameFile: frame, key: frameName }), { flag: 'wx' });
   }
 }
 
