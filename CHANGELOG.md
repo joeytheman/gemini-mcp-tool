@@ -3,7 +3,7 @@
 ## [Unreleased]
 - Each tool call owns its keep-alive timer and output preview. Before, the first of two overlapping calls to finish stopped the other's keep-alives, and the client aborted the survivor about 30 minutes later.
 - agy is stopped (SIGTERM, then SIGKILL 10 s later) when it runs 2 minutes past its `printTimeout`, or after 2 hours when there is no positive whole-unit `printTimeout` (`90s`, `15m`, `1h`). The call fails with an error saying agy ran past its time limit and was stopped.
-- Cancelling an MCP request stops its agy process, and a cancelled call sends no final progress notification.
+- Cancelling an MCP request stops its agy process (Help's `agy --help` included) and stops that call's progress notifications at once, even while a tool that ignores the cancel is still running.
 - Every agy call reads its answer from agy's documented JSON envelope (`--output-format json`), including text-mode `ask-gemini`, `changeMode` and `brainstorm`. Text callers still get plain text: the envelope's `response`, trimmed.
 - Removed transcript recovery and `AGY_DISABLE_TRANSCRIPT_RECOVERY`. The tool no longer reads agy's private conversation folders for answers; an empty run fails with `Could not parse the Antigravity CLI JSON envelope` instead of being filled in from a transcript. The step store is still read, only for the "Gemini steps" usage line.
 - Text calls now get the checks json calls already had: a `conversationId` agy did not resume throws `agy did not resume conversation`, and an empty answer with denied actions throws the denied-actions error instead of returning an empty string. In `changeMode` that error says Gemini tried to act on the files itself and asks for OLD/NEW edits again, rather than suggesting `yolo`.

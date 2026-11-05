@@ -95,7 +95,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest,
     const progressToken = (request.params as any)._meta?.progressToken;
     
     // Start progress updates if client requested them
-    const progress = startProgressUpdates(toolName, progressToken, sendProgressNotification);
+    const progress = startProgressUpdates(toolName, progressToken, sendProgressNotification, extra.signal);
     
     try {
       // Get prompt and other parameters from arguments with proper typing
@@ -111,8 +111,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest,
         extra.signal
       );
 
-      // A request cancelled after the tool finished still has a retired token.
-      progress.finish(extra.signal.aborted ? 'cancelled' : 'success');
+      progress.finish('success');
 
       return {
         content: [
@@ -124,7 +123,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest,
         isError: false,
       };
     } catch (error) {
-      progress.finish(extra.signal.aborted ? 'cancelled' : 'failure');
+      progress.finish('failure');
       
       Logger.error(`Error in tool '${toolName}':`, error);
 

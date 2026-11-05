@@ -55,14 +55,37 @@ describe('startProgressUpdates', () => {
     expect(callsFor('tok-failed').slice(-1)).toEqual([['tok-failed', 100, 100, '❌ ask-gemini failed']]);
   });
 
-  it('sends nothing more once a call is cancelled, since its token is retired', () => {
-    const updates = startProgressUpdates('live-pass', 'tok-cancelled', send);
+  it('stops every notification the moment the request is cancelled, while the tool still runs', () => {
+    const controller = new AbortController();
+    const updates = startProgressUpdates('timeout-test', 'tok-cancelled', send, controller.signal);
     send.mockClear();
 
-    updates.finish('cancelled');
-    vi.advanceTimersByTime(PROTOCOL.KEEPALIVE_INTERVAL * 2);
+    controller.abort();
+    vi.advanceTimersByTime(PROTOCOL.KEEPALIVE_INTERVAL * 3);
+    updates.finish('success');
 
     expect(send).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('sends nothing for a request that was cancelled before the call started', () => {
+    const controller = new AbortController();
+    controller.abort();
+
+    const updates = startProgressUpdates('ask-gemini', 'tok-early', send, controller.signal);
+    vi.advanceTimersByTime(PROTOCOL.KEEPALIVE_INTERVAL);
+    updates.finish('failure');
+
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it('stops listening for a cancel once the call finishes', () => {
+    const controller = new AbortController();
+    const removeListener = vi.spyOn(controller.signal, 'removeEventListener');
+
+    startProgressUpdates('ask-gemini', 'tok-done', send, controller.signal).finish('success');
+
+    expect(removeListener).toHaveBeenCalledWith('abort', expect.any(Function));
   });
 
   it('sends nothing when the client asked for no progress', () => {

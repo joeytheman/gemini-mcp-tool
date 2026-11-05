@@ -9,7 +9,7 @@ export type SendProgress = (
   message: string
 ) => Promise<void> | void;
 
-export type ProgressOutcome = 'success' | 'failure' | 'cancelled';
+export type ProgressOutcome = 'success' | 'failure';
 
 export interface ProgressUpdates {
   recordOutput(output: string): void;
@@ -33,18 +33,24 @@ function keepAliveMessage(operationName: string, index: number): string {
  * Keep-alive progress for ONE tool call. Each call owns its timer and output
  * preview, so a call that finishes never silences another call still running
  * in the same server; a silenced call is aborted by the client.
+ *
+ * Cancelling the request retires its token, and the client logs progress on a
+ * retired token as an error, so a cancel stops every notification at once,
+ * even while the tool itself is still running.
  */
 export function startProgressUpdates(
   operationName: string,
   progressToken: ProgressToken | undefined,
-  send: SendProgress
+  send: SendProgress,
+  signal?: AbortSignal
 ): ProgressUpdates {
-  if (!progressToken) {
+  if (!progressToken || signal?.aborted) {
     return { recordOutput: () => {}, finish: () => {} };
   }
 
   let latestOutput = '';
   let ticks = 0;
+  let stopped = false;
   void send(progressToken, 0, undefined, `🔍 Starting ${operationName}`);
 
   const interval = setInterval(() => {
@@ -54,12 +60,18 @@ export function startProgressUpdates(
     void send(progressToken, ticks, undefined, preview ? `${base}\n📝 Output: ...${preview}` : base);
   }, PROTOCOL.KEEPALIVE_INTERVAL);
 
+  const stop = () => {
+    stopped = true;
+    clearInterval(interval);
+    signal?.removeEventListener('abort', stop);
+  };
+  signal?.addEventListener('abort', stop, { once: true });
+
   return {
     recordOutput: (output) => { latestOutput = output; },
     finish: (outcome) => {
-      clearInterval(interval);
-      // A cancelled request's token is retired: the client logs progress on it as an error.
-      if (outcome === 'cancelled') return;
+      if (stopped) return;
+      stop();
       void send(
         progressToken,
         100,

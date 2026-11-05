@@ -112,11 +112,12 @@ describe('Gemini MCP Server', () => {
       ]);
     });
 
-    it('sends no final notification when the request was cancelled before the tool returned', async () => {
+    it('sends no final notification when the request is cancelled before the tool returns', async () => {
       const controller = new AbortController();
+      const pending = callTool(controller.signal);
       controller.abort();
 
-      const result = await callTool(controller.signal);
+      const result = await pending;
 
       expect(result.isError).toBe(false);
       expect(finalNotifications()).toEqual([]);
