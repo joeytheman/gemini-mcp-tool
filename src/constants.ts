@@ -25,6 +25,7 @@ export const ERROR_MESSAGES = {
   AGY_CANCELLED: "The request was cancelled, so agy was stopped.",
   INVALID_WORKING_DIRECTORY: "workingDirectory must be an absolute path to an existing directory that is not a filesystem root",
   LIVE_PASS_ARTIFACT_DIR: "artifactDir must be an absolute path strictly inside workingDirectory",
+  LIVE_PASS_WEB_VIEWPORT: "a playwright target's viewport must be WxH, such as 390x844",
   LIVE_PASS_NO_BRIEF: "brief is required: describe the base URL or app id, the served-branch marker, the seed case, and any navigation hints.",
   // agy resolves an @reference up to the first space, so a path containing
   // whitespace becomes a dangling reference that hangs until --print-timeout.
@@ -88,14 +89,18 @@ export const LIVE_PASS = {
   FRESHNESS_TOLERANCE_MS: 2000,
   CONVERSATION_LINE_PREFIX: "[GEMINI_CONVERSATION_ID=",
   LAYOUT_FILE_SUFFIX: ".layout.json",
+  CAPTURE_FILE_SUFFIX: ".capture.js",
+  // React Native Web lays out again asynchronously after a viewport resize.
+  CAPTURE_SETTLE_MS: 1000,
+  CAPTURE_BOTTOM_PAD_PX: 24,
   LAYOUT_CHECK_ID: "layout-check/1",
   LAYOUT_MAX_ENTRIES: 50,
   LAYOUT_TEXT_CHARS: 80,
 } as const;
 
 /**
- * Run in the page by browser_evaluate after each web frame, printed verbatim in
- * the live-pass prompt. Its return value is the `.layout.json` file the layout
+ * Embedded in each web target's capture file, which runs it in the page right
+ * after the screenshot. Its return value is the `.layout.json` file the layout
  * validator parses, so the two change together. The readable source is
  * src/layout-check.snippet.js; its caps and check id must equal LIVE_PASS's.
  */

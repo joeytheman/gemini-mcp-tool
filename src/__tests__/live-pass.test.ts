@@ -39,18 +39,20 @@ import {
   buildLivePassPrompt,
   frameFileName,
   prescribedFrameNames,
-  prescribedLayoutFiles,
+  prescribedTargetFiles,
   formatLayoutSection,
   readLayoutChecks,
   validateFrames,
   checkCoverage,
   deriveVerdict,
   runPublishCommand,
+  writeCaptureScripts,
   type LivePassResult,
   type LivePassTarget,
 } from '../tools/live-pass.tool.js';
 import { ERROR_MESSAGES, LAYOUT_CHECK_SNIPPET, LIVE_PASS, MODELS } from '../constants.js';
 import { readLayoutCheck, type LayoutReport } from '../utils/layoutCheck.js';
+import { buildCaptureScript, CONTENT_BOTTOM_SNIPPET } from '../utils/captureScript.js';
 import { makeTempDir, cleanupTempDirs } from './utils/test-helpers.js';
 
 // ------------------------------------------------------------------ helpers
@@ -204,6 +206,20 @@ describe('livePassArgsSchema', () => {
 
     expect(parsed.targets).toHaveLength(2);
   });
+
+  it('rejects a playwright target whose viewport is not WxH, and lets maestro name a form factor', () => {
+    const phone = { ...HOME_TARGET, viewport: 'iPhone 15' };
+
+    const web = livePassArgsSchema.safeParse({ ...minimal, targets: [HOME_TARGET, phone] });
+    const native = livePassArgsSchema.safeParse({ ...minimal, driver: 'maestro', targets: [phone] });
+
+    expect(web.success).toBe(false);
+    expect(web.error?.issues).toEqual([expect.objectContaining({
+      path: ['targets', 1, 'viewport'],
+      message: `${ERROR_MESSAGES.LIVE_PASS_WEB_VIEWPORT}. Received 'iPhone 15'.`,
+    })]);
+    expect(native.success).toBe(true);
+  });
 });
 
 describe('LIVE_PASS_RESULT_JSON_SCHEMA', () => {
@@ -280,9 +296,11 @@ describe('buildLivePassPrompt', () => {
   it('carries the playwright procedure and the evidence discipline', () => {
     const prompt = buildLivePassPrompt({ ...base, driver: 'playwright', resumed: false });
 
-    expect(prompt).toContain('browser_take_screenshot');
+    expect(prompt).toContain('Capture it: browser_run_code_unsafe with filename set to the exact absolute path printed as "capture:" for that target below. Never pass code, never write, edit or read a capture file');
     expect(prompt).toContain('/work/tree/.live-pass/run1');
-    expect(prompt).toContain('never use fullPage');
+    expect(prompt).toContain('If a capture returns an error, add the target to "skipped" with the error text. Never fall back to browser_take_screenshot.');
+    expect(prompt).not.toContain('browser_resize');
+    expect(prompt).not.toContain('fullPage');
     expect(prompt).toContain('answer is ONLY the schema JSON');
     expect(prompt).toContain('a spinner, blank page, skeleton, error, or the wrong screen is a FAIL');
     expect(prompt).toContain('PASSES when it shows that state with everything "expected" names');
@@ -313,6 +331,7 @@ describe('buildLivePassPrompt', () => {
     expect(prompt).toContain('xcrun simctl io');
     expect(prompt).toContain('Never use take_screenshot for evidence');
     expect(prompt).not.toContain('browser_take_screenshot');
+    expect(prompt).not.toContain('browser_run_code_unsafe');
   });
 
   it('adds the delta paragraph only for a resumed pass', () => {
@@ -370,12 +389,12 @@ describe('buildLivePassPrompt: context Gemini used to dig for', () => {
       '- browser_wait_for {text? | textGone? | time?}',
       '- browser_find {text | regex}',
       '- browser_snapshot {target?, depth?, boxes?}',
-      '- browser_resize {width, height}',
-      '- browser_take_screenshot {filename, fullPage?, scale?}',
-      '- browser_evaluate {function, target?, filename?}',
+      '- browser_run_code_unsafe {filename}: filename is absolute.',
+      '- browser_evaluate {function, filename}: the return value is written to filename as JSON instead of returned to you.',
     ]) {
       expect(prompt).toContain(line);
     }
+    expect(prompt).not.toContain('- browser_take_screenshot');
     expect(prompt).toContain('a unique selector such as [data-testid="save"]');
     expect(prompt).not.toContain('- inspect_screen {device_id}');
   });
@@ -436,12 +455,12 @@ describe('buildLivePassPrompt: context Gemini used to dig for', () => {
     expect(prompt).not.toContain('Never use openLink to skip a user step.');
   });
 
-  it('sends a web pass\'s browser_navigate only where the user path allows, and keeps browser_evaluate to the printed snippets', () => {
+  it('sends a web pass\'s browser_navigate only where the user path allows, and keeps browser_evaluate and run_code to the printed save functions and capture files', () => {
     const prompt = buildLivePassPrompt({ ...base, driver: 'playwright' });
 
     expect(prompt).not.toContain("browser_navigate to the target's route");
     expect(prompt).toContain('browser_navigate opens only the URLs the "User path" section allows.\nFor each target, in order:\n- Reach it as the "User path" section says.');
-    expect(prompt).toContain('browser_evaluate runs only the two snippets printed here. Never use it to click, type, navigate, or set storage, cookies or app state.');
+    expect(prompt).toContain('browser_evaluate runs only the "save layout:" functions and browser_run_code_unsafe only the "capture:" files. Neither is used to click, type, navigate, or set storage, cookies or app state.');
   });
 
   it('has a maestro pass launch the app only at the start and openLink only for a link arrival', () => {
@@ -463,35 +482,59 @@ describe('buildLivePassPrompt: context Gemini used to dig for', () => {
     expect(prompt).toContain('add the target to "skipped" with "brief missing: <the fact>". Never search the code for it.');
   });
 
-  it('prints the layout snippet verbatim and one prescribed layout file per web target', () => {
+  it('prints each web target its own capture file, layout file and save function, and neither page snippet', () => {
     const prompt = buildLivePassPrompt({ ...base, driver: 'playwright' });
 
-    expect(prompt).toContain(`Layout snippet:\n${LAYOUT_CHECK_SNIPPET}`);
-    expect(prompt).toContain('   layout: /work/tree/.live-pass/run1/home-default-390x844.layout.json');
-    expect(prompt).toContain('   layout: /work/tree/.live-pass/run1/home-offline-390x844.layout.json');
-    expect(prompt).toContain('filename set to the exact absolute path printed as "layout:" for that target. Do not open that file or report on it');
+    expect(prompt).toContain([
+      '   file: /work/tree/.live-pass/run1/home-default-390x844.png',
+      '   capture: /work/tree/.live-pass/run1/home-default-390x844.capture.js',
+      '   layout: /work/tree/.live-pass/run1/home-default-390x844.layout.json',
+      '   save layout: () => window.__livePassLayout?.["home-default-390x844.png"]',
+    ].join('\n'));
+    expect(prompt).toContain([
+      '   file: /work/tree/.live-pass/run1/home-offline-390x844.png',
+      '   capture: /work/tree/.live-pass/run1/home-offline-390x844.capture.js',
+      '   layout: /work/tree/.live-pass/run1/home-offline-390x844.layout.json',
+      '   save layout: () => window.__livePassLayout?.["home-offline-390x844.png"]',
+    ].join('\n'));
+    expect(prompt).toContain('browser_evaluate with function set to the "save layout:" function printed for that target, copied verbatim, and filename set to the exact absolute path printed as "layout:" for that target. Do not open that file or report on it');
+    expect(prompt).not.toContain(LAYOUT_CHECK_SNIPPET);
+    expect(prompt).not.toContain(CONTENT_BOTTOM_SNIPPET);
+    expect(prompt).not.toContain('getBoundingClientRect');
   });
 
-  it('asks a maestro pass for no layout check', () => {
+  it('asks a maestro pass for no capture file or layout check', () => {
     const prompt = buildLivePassPrompt({ ...base, driver: 'maestro' });
 
+    expect(prompt).not.toContain('capture:');
     expect(prompt).not.toContain('layout:');
     expect(prompt).not.toContain(LAYOUT_CHECK_SNIPPET);
+    expect(prompt).not.toContain(CONTENT_BOTTOM_SNIPPET);
   });
 });
 
-describe('prescribedLayoutFiles', () => {
-  it('puts each layout file next to its frame, sharing the frame stem and its collision suffix', () => {
+describe('prescribedTargetFiles', () => {
+  it('puts each capture and layout file next to its frame, sharing the frame stem and its collision suffix', () => {
     const targets = [
       { ...HOME_TARGET, screen: 'settings/profile' },
       { ...HOME_TARGET, screen: 'settings-profile' },
     ];
 
-    const files = prescribedLayoutFiles(targets, '/art');
+    const files = prescribedTargetFiles(targets, '/art');
 
     expect([...files.values()]).toEqual([
-      '/art/settings-profile-default-390x844.layout.json',
-      '/art/settings-profile-default-390x844-2.layout.json',
+      {
+        frameName: 'settings-profile-default-390x844.png',
+        frame: '/art/settings-profile-default-390x844.png',
+        capture: '/art/settings-profile-default-390x844.capture.js',
+        layout: '/art/settings-profile-default-390x844.layout.json',
+      },
+      {
+        frameName: 'settings-profile-default-390x844-2.png',
+        frame: '/art/settings-profile-default-390x844-2.png',
+        capture: '/art/settings-profile-default-390x844-2.capture.js',
+        layout: '/art/settings-profile-default-390x844-2.layout.json',
+      },
     ]);
   });
 });
@@ -1399,6 +1442,44 @@ describe('live-pass execute: checkout, turns and layout checks', () => {
     expect(cleanReport).toContain('- home / default / 390x844: clean');
     const verdictAndWhy = (report: string) => report.slice(report.indexOf('# Live pass'), report.indexOf('## Served-branch check'));
     expect(verdictAndWhy(defectiveReport).replace(defective, clean)).toBe(verdictAndWhy(cleanReport));
+  });
+
+  it('writes one capture script per web target at its prescribed path before agy runs', async () => {
+    const workDir = makeWorkDir();
+    const artifactDir = path.join(workDir, '.live-pass', 'run1');
+    const wide = { ...HOME_TARGET, viewport: '1280x800' };
+    let writtenBeforeAgy: string[] = [];
+    mockExecuteAgyJson.mockImplementation(async () => {
+      writtenBeforeAgy = fs.readdirSync(artifactDir).sort();
+      return envelope(makeResult());
+    });
+
+    await run({ targets: [HOME_TARGET, wide], brief: 'b', driver: 'playwright', workingDirectory: workDir, artifactDir });
+
+    expect(writtenBeforeAgy).toEqual(['home-default-1280x800.capture.js', 'home-default-390x844.capture.js']);
+    for (const [stem, viewport] of [['home-default-390x844', { width: 390, height: 844 }], ['home-default-1280x800', { width: 1280, height: 800 }]] as const) {
+      expect(fs.readFileSync(path.join(artifactDir, `${stem}.capture.js`), 'utf-8')).toBe(buildCaptureScript({
+        viewport, frameFile: path.join(artifactDir, `${stem}.png`), key: `${stem}.png`,
+      }));
+    }
+  });
+
+  it('writes no capture script for a maestro pass', async () => {
+    const workDir = makeWorkDir();
+    const artifactDir = path.join(workDir, '.live-pass', 'run1');
+    mockExecuteAgyJson.mockResolvedValue(envelope(makeResult()));
+
+    await run({ targets: [HOME_TARGET], brief: 'b', driver: 'maestro', workingDirectory: workDir, artifactDir });
+
+    expect(fs.readdirSync(artifactDir)).toEqual([]);
+  });
+
+  it('refuses to write a capture script for a viewport that is not WxH', () => {
+    const artifactDir = makeWorkDir();
+
+    expect(() => writeCaptureScripts([{ ...HOME_TARGET, viewport: 'iPhone 15' }], artifactDir))
+      .toThrow(`${ERROR_MESSAGES.LIVE_PASS_WEB_VIEWPORT}. Received 'iPhone 15'.`);
+    expect(fs.readdirSync(artifactDir)).toEqual([]);
   });
 
   it('adds no layout section to a maestro pass', async () => {
