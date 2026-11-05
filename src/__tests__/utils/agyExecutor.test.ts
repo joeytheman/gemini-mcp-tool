@@ -288,6 +288,16 @@ describe('executeAgyCLI', () => {
         .rejects.toThrow(`${ERROR_MESSAGES.AGY_DENIED_ACTIONS}: RunCommand (command)`);
     });
 
+    it('throws AGY_DENIED_ACTIONS when only a replayed structured_output came back', async () => {
+      mockExecuteCommand.mockResolvedValue(textEnvelope('', {
+        structured_output: { ok: true },
+        denied_actions: [{ action: 'command', display_name: 'RunCommand' }],
+      }));
+
+      await expect(executeAgyCLI('test', {}))
+        .rejects.toThrow(`${ERROR_MESSAGES.AGY_DENIED_ACTIONS}: RunCommand (command)`);
+    });
+
     it('throws CHANGEMODE_DENIED_ACTIONS, not the yolo advice, when changeMode tried to write the file', async () => {
       mockExecuteCommand.mockResolvedValue(textEnvelope('', {
         denied_actions: [{ action: 'write_file', display_name: 'EditFile' }],
@@ -596,6 +606,13 @@ describe('executeAgyCLI json mode', () => {
     await expect(executeAgyCLI('test', { outputFormat: 'json' }))
       .rejects.toThrow('RunCommand (command)');
     expect(mockCacheResponse).not.toHaveBeenCalled();
+  });
+
+  it('resolves when actions were denied but this call\'s schema answer came back', async () => {
+    const raw = envelopeLine({ response: '', denied_actions: [{ action: 'command', display_name: 'RunCommand' }] });
+    mockExecuteCommand.mockResolvedValue(raw);
+
+    expect(await executeAgyCLI('test', { outputFormat: 'json', jsonSchema: '{"type":"object"}' })).toBe(raw);
   });
 
   it('resolves when actions were denied but a response still came back', async () => {

@@ -334,8 +334,11 @@ function verifyJsonEnvelope(stdout: string, opts: AgyCLIOptions): AgyJsonEnvelop
     );
   }
 
-  const hasContent = Boolean(envelope.response?.trim()) ||
-    (envelope.structured_output !== undefined && envelope.structured_output !== null);
+  // A resumed turn replays the previous turn's structured_output, so it only
+  // counts as this call's answer when this call passed a schema.
+  const hasStructuredAnswer = Boolean(opts.jsonSchema) &&
+    envelope.structured_output !== undefined && envelope.structured_output !== null;
+  const hasContent = Boolean(envelope.response?.trim()) || hasStructuredAnswer;
   const denied = deniedActionsSummary(envelope);
   if (!hasContent && denied) {
     // changeMode asks for edits back, so yolo (letting Gemini write the files) is the wrong remedy.
