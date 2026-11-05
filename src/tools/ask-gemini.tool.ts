@@ -7,6 +7,7 @@ import {
   renderAgyJsonEnvelope,
   formatAgyUsageLine,
   formatConversationLine,
+  printTimeoutSchema,
   type AgyCLIOptions,
 } from '../utils/agyExecutor.js';
 import {
@@ -34,7 +35,7 @@ export const askGeminiArgsSchema = z.object({
   effort: z.enum(["low", "medium", "high"]).optional().describe("agy --effort, only for models that accept it; tiered Gemini names encode effort in the name ('Gemini 3.8 Flash (High)') and agy rejects --effort for them."),
   includeDirectories: z.union([z.string(), z.array(z.string())]).optional().describe("Additional directories to include in the Antigravity workspace. Comma-separated string or array maps to repeated --add-dir flags."),
   debug: z.boolean().default(false).describe("Unsupported legacy Gemini CLI option. Use agy logs for troubleshooting."),
-  printTimeout: z.string().optional().describe(`agy --print-timeout duration, such as '5m', '90s', or '10m'. If omitted, agy uses its default. ${PRINT_TIMEOUT_CEILING_NOTE}`),
+  printTimeout: printTimeoutSchema.optional().describe(`agy --print-timeout duration, such as '5m', '90s', or '10m'. If omitted, agy uses its default. ${PRINT_TIMEOUT_CEILING_NOTE}`),
 
   promptInteractive: z.string().optional().describe("Unsupported in MCP request/response mode because it requires an interactive TTY."),
   extensions: z.union([z.string(), z.array(z.string())]).optional().describe("Unsupported legacy Gemini CLI option. Antigravity uses plugins instead of Gemini CLI extensions."),

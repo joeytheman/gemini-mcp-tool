@@ -19,6 +19,8 @@ export const ERROR_MESSAGES = {
   AGY_STATUS_ERROR: "Antigravity CLI returned status ERROR",
   AGY_DENIED_ACTIONS: "Antigravity CLI produced no response because it denied required actions. Retry with `yolo: true`, or allow the actions in the Antigravity `permissions.allow` settings. Denied",
   CHANGEMODE_DENIED_ACTIONS: "changeMode returned no OLD/NEW edits. Ask again for the change as OLD/NEW edits, without yolo. Denied",
+  AGY_EMPTY_ANSWER: "Antigravity CLI (`agy`) finished with an empty answer.",
+  INVALID_PRINT_TIMEOUT: "printTimeout must be a duration such as 90s, 15m, 2h30m or 2.5h, or 0 for no limit",
   INVALID_CONVERSATION_ID: "conversationId must be a non-empty agy conversation ID.",
   CONVERSATION_NOT_RESUMED: "agy did not resume conversation",
   AGY_HUNG: "Antigravity CLI (`agy`) ran past its time limit and was stopped",

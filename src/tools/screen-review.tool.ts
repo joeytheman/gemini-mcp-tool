@@ -7,6 +7,7 @@ import {
   executeAgyJson,
   formatAgyUsageLine,
   formatConversationLine,
+  printTimeoutSchema,
   toAgyJsonSchema,
   type AgyJsonEnvelope,
 } from '../utils/agyExecutor.js';
@@ -40,7 +41,7 @@ export const screenReviewArgsSchema = z.object({
   routeFile: z.string().optional().describe("plan mode only: absolute path to the route/screen source file to inventory. Must exist inside workingDirectory."),
   baseRef: z.string().min(1).optional().describe("review mode only: the git ref the diff under review is based on, such as 'origin/main'. Resolved in code to its merge base with HEAD (the call fails when it does not resolve); Gemini may then run read-only `git diff <merge-base>...HEAD` and `git show <merge-base>:<path>` to judge severity by the branch's own diff. That needs yolo: true, because headless agy denies the shell otherwise. Without baseRef Gemini runs no git at all."),
   model: z.string().default(MODELS.MEDIUM).describe(`${MODEL_CHOICE_DESCRIPTION} Defaults to '${MODELS.MEDIUM}'.`),
-  printTimeout: z.string().default(LIVE_PASS.SCREEN_REVIEW_PRINT_TIMEOUT).describe(`agy --print-timeout for the review. ${PRINT_TIMEOUT_CEILING_NOTE}`),
+  printTimeout: printTimeoutSchema.default(LIVE_PASS.SCREEN_REVIEW_PRINT_TIMEOUT).describe(`agy --print-timeout for the review. ${PRINT_TIMEOUT_CEILING_NOTE}`),
   yolo: z.boolean().default(false).describe("Pass --dangerously-skip-permissions. Defaults to false because a review only reads. Set it to true when the instructions ask Gemini to read repository files that are not passed as images: it reaches for a shell to do that, headless agy denies the shell, and the call then fails naming the denied action."),
   conversationId: z.string().min(1).optional().describe("Resume a previous review so round 2 keeps round 1's visual analysis."),
 }).superRefine((value, ctx) => {

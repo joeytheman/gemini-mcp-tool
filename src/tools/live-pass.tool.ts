@@ -9,6 +9,7 @@ import {
   executeAgyJson,
   formatAgyUsageLine,
   formatConversationLine,
+  printTimeoutSchema,
   toAgyJsonSchema,
   type AgyJsonEnvelope,
 } from '../utils/agyExecutor.js';
@@ -44,7 +45,7 @@ export const livePassArgsSchema = z.object({
   artifactDir: z.string().optional().describe("Absolute directory for the captured PNGs and manifest.json. Must be strictly inside workingDirectory. Defaults to <workingDirectory>/.live-pass/<timestamp>."),
   driver: z.enum(['playwright', 'maestro']).describe("Which MCP server Gemini drives: 'playwright' for web, 'maestro' for a booted simulator."),
   model: z.string().default(MODELS.MEDIUM).describe(`${MODEL_CHOICE_DESCRIPTION} Defaults to '${MODELS.MEDIUM}'.`),
-  printTimeout: z.string().default(LIVE_PASS.DEFAULT_PRINT_TIMEOUT).describe(`agy --print-timeout for the whole walk. A full pass takes minutes. ${PRINT_TIMEOUT_CEILING_NOTE}`),
+  printTimeout: printTimeoutSchema.default(LIVE_PASS.DEFAULT_PRINT_TIMEOUT).describe(`agy --print-timeout for the whole walk. A full pass takes minutes. ${PRINT_TIMEOUT_CEILING_NOTE}`),
   yolo: z.boolean().default(true).describe("Pass --dangerously-skip-permissions so Gemini may drive its MCP servers unattended. Without it agy denies the tool calls and the pass is BLOCKED. Refused when workingDirectory is a filesystem root."),
   publishCommand: z.string().optional().describe("Optional shell command run in code after validation, with {files} replaced by the shell-quoted paths of the frames that validated OK. Its stdout is returned as PR markdown. Never run on a BLOCKED pass."),
   conversationId: z.string().min(1).optional().describe("Resume a previous pass so Gemini can report deltas (resolved / regressions / changes) against what it saw then. The browser or simulator still starts fresh."),

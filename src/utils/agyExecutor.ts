@@ -66,12 +66,15 @@ export interface AgyJsonEnvelope {
 }
 
 const DURATION_TERM = /(\d+(?:\.\d+)?)(ms|h|m|s)/g;
-const GO_DURATION = new RegExp(`^(?:${DURATION_TERM.source})+$`);
 const DURATION_UNIT_MS = { ms: 1, s: 1000, m: 60_000, h: 3_600_000 } as const;
+const PRINT_TIMEOUT_PATTERN = new RegExp(`^(?:0|(?:${DURATION_TERM.source})+)$`);
 
-function durationMs(duration: string): number {
-  if (!GO_DURATION.test(duration)) return 0;
-  return [...duration.matchAll(DURATION_TERM)].reduce(
+export const printTimeoutSchema = z.string().regex(PRINT_TIMEOUT_PATTERN, ERROR_MESSAGES.INVALID_PRINT_TIMEOUT);
+
+/** Milliseconds (0 is agy's "no limit"), or undefined for a value the tool schemas reject. */
+export function printTimeoutMs(printTimeout: string): number | undefined {
+  if (!PRINT_TIMEOUT_PATTERN.test(printTimeout)) return undefined;
+  return [...printTimeout.matchAll(DURATION_TERM)].reduce(
     (total, [, amount, unit]) => total + Number(amount) * DURATION_UNIT_MS[unit as keyof typeof DURATION_UNIT_MS],
     0
   );
@@ -79,11 +82,10 @@ function durationMs(duration: string): number {
 
 /**
  * How long an agy process may run: its print timeout plus a margin, or the
- * default ceiling when the timeout is missing, unparseable, or zero (agy reads
- * 0 as "no limit").
+ * default ceiling when there is no positive timeout.
  */
 export function agyKillAfterMs(printTimeout?: string): number {
-  const timeoutMs = durationMs(printTimeout?.trim() ?? '');
+  const timeoutMs = printTimeoutMs(printTimeout ?? '') ?? 0;
   return timeoutMs > 0 && timeoutMs <= Number.MAX_SAFE_INTEGER - AGY_LIMITS.CEILING_MARGIN_MS
     ? timeoutMs + AGY_LIMITS.CEILING_MARGIN_MS
     : AGY_LIMITS.DEFAULT_CEILING_MS;
@@ -365,13 +367,15 @@ function verifyJsonEnvelope(stdout: string, opts: AgyCLIOptions): AgyJsonEnvelop
   // counts as this call's answer when this call passed a schema.
   const hasStructuredAnswer = Boolean(opts.jsonSchema) &&
     envelope.structured_output !== undefined && envelope.structured_output !== null;
-  if (envelope.response?.trim() || hasStructuredAnswer) return envelope;
-
+  const hasContent = Boolean(envelope.response?.trim()) || hasStructuredAnswer;
   const denied = deniedActionsSummary(envelope);
-  if (!denied) throw new Error(ERROR_MESSAGES.AGY_NO_OUTPUT);
-  // changeMode asks for edits back, so yolo (letting Gemini write the files) is the wrong remedy.
-  const message = opts.changeMode ? ERROR_MESSAGES.CHANGEMODE_DENIED_ACTIONS : ERROR_MESSAGES.AGY_DENIED_ACTIONS;
-  throw new Error(`${message}: ${denied}`);
+  if (!hasContent && denied) {
+    // changeMode asks for edits back, so yolo (letting Gemini write the files) is the wrong remedy.
+    const message = opts.changeMode ? ERROR_MESSAGES.CHANGEMODE_DENIED_ACTIONS : ERROR_MESSAGES.AGY_DENIED_ACTIONS;
+    throw new Error(`${message}: ${denied}`);
+  }
+
+  return envelope;
 }
 
 export async function executeAgyCLI(
@@ -488,6 +492,9 @@ ${processedPrompt}
     }
 
     const answer = (envelope.response ?? '').trim();
+    if (!answer) {
+      throw new Error(`${ERROR_MESSAGES.AGY_EMPTY_ANSWER} ${formatConversationLine(envelope.conversation_id ?? '')}`);
+    }
     if (cacheKey) cacheResponse(cacheKey, answer);
     return answer;
   } catch (error) {

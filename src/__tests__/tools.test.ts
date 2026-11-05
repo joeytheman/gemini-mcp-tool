@@ -1,6 +1,9 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { toolRegistry, getToolDefinitions, toolExists, getPromptDefinitions } from '../tools/index.js';
-import { CLI } from '../constants.js';
+import { CLI, ERROR_MESSAGES } from '../constants.js';
+import { askGeminiArgsSchema } from '../tools/ask-gemini.tool.js';
+import { livePassArgsSchema } from '../tools/live-pass.tool.js';
+import { screenReviewArgsSchema } from '../tools/screen-review.tool.js';
 
 describe('Tool Registry', () => {
   describe('getToolDefinitions', () => {
@@ -183,6 +186,23 @@ describe('Tool Registry', () => {
       expect(printTimeout.description).toContain(
         'The server stops agy 2 minutes after this limit, or after 2 hours when no limit is given.'
       );
+    });
+
+    describe.each([
+      ['ask-gemini', askGeminiArgsSchema],
+      ['live-pass', livePassArgsSchema],
+      ['screen-review', screenReviewArgsSchema],
+    ])('%s printTimeout', (_toolName, schema) => {
+      it.each(['abc', '+3h', '1h30'])('rejects %j, naming the accepted form', (printTimeout) => {
+        const result = schema.shape.printTimeout.safeParse(printTimeout);
+
+        expect(result.success).toBe(false);
+        expect(result.error?.issues[0].message).toBe(ERROR_MESSAGES.INVALID_PRINT_TIMEOUT);
+      });
+
+      it.each(['90s', '2h30m', '2.5h', '0'])('accepts %j', (printTimeout) => {
+        expect(schema.shape.printTimeout.safeParse(printTimeout)).toEqual({ success: true, data: printTimeout });
+      });
     });
 
     it('brainstorm should have methodology parameter', () => {

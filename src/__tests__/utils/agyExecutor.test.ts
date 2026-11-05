@@ -42,6 +42,8 @@ import {
   formatAgyUsageLine,
   formatConversationLine,
   agyKillAfterMs,
+  printTimeoutMs,
+  printTimeoutSchema,
 } from '../../utils/agyExecutor.js';
 import { CLI, MODELS, ERROR_MESSAGES, AGY_LIMITS } from '../../constants.js';
 
@@ -282,18 +284,20 @@ describe('executeAgyCLI', () => {
     it.each([
       ['an empty answer', textEnvelope('')],
       ['a whitespace-only answer', textEnvelope(' \n ')],
-    ])('throws AGY_NO_OUTPUT for %s and caches nothing', async (_label, stdout) => {
+    ])('throws AGY_EMPTY_ANSWER with the conversation to resume for %s, and caches nothing', async (_label, stdout) => {
       mockIsCacheEnabled.mockReturnValue(true);
       mockExecuteCommand.mockResolvedValue(stdout);
 
-      await expect(executeAgyCLI('test', {})).rejects.toThrow(ERROR_MESSAGES.AGY_NO_OUTPUT);
+      await expect(executeAgyCLI('test', {})).rejects.toThrow(new Error(
+        `${ERROR_MESSAGES.AGY_EMPTY_ANSWER} [GEMINI_CONVERSATION_ID=conv-abc]`
+      ));
       expect(mockCacheResponse).not.toHaveBeenCalled();
     });
 
-    it('throws AGY_NO_OUTPUT for an empty changeMode answer instead of reporting no edits', async () => {
+    it('throws AGY_EMPTY_ANSWER for an empty changeMode answer instead of reporting no edits', async () => {
       mockExecuteCommand.mockResolvedValue(textEnvelope(''));
 
-      await expect(executeAgyCLI('test', { changeMode: true })).rejects.toThrow(ERROR_MESSAGES.AGY_NO_OUTPUT);
+      await expect(executeAgyCLI('test', { changeMode: true })).rejects.toThrow(ERROR_MESSAGES.AGY_EMPTY_ANSWER);
     });
 
     it('throws AGY_STATUS_ERROR with the envelope error text', async () => {
@@ -643,22 +647,11 @@ describe('executeAgyCLI json mode', () => {
     expect(mockCacheResponse).not.toHaveBeenCalled();
   });
 
-  it.each([
-    ['no structured_output', { structured_output: null }],
-    ['only a structured_output replayed from an earlier turn', { structured_output: { ok: true } }],
-  ])('throws AGY_NO_OUTPUT for a SUCCESS envelope with an empty response and %s', async (_label, overrides) => {
-    mockIsCacheEnabled.mockReturnValue(true);
-    mockExecuteCommand.mockResolvedValue(envelopeLine({ response: '', ...overrides }));
-
-    await expect(executeAgyCLI('test', { outputFormat: 'json' })).rejects.toThrow(ERROR_MESSAGES.AGY_NO_OUTPUT);
-    expect(mockCacheResponse).not.toHaveBeenCalled();
-  });
-
-  it('resolves when the response is empty but this call\'s schema answer came back', async () => {
-    const raw = envelopeLine({ response: '' });
+  it('returns a SUCCESS envelope with an empty answer for its json caller to report', async () => {
+    const raw = envelopeLine({ response: '', structured_output: null });
     mockExecuteCommand.mockResolvedValue(raw);
 
-    expect(await executeAgyCLI('test', { outputFormat: 'json', jsonSchema: '{"type":"object"}' })).toBe(raw);
+    expect(await executeAgyCLI('test', { outputFormat: 'json' })).toBe(raw);
   });
 
   it('resolves when actions were denied but this call\'s schema answer came back', async () => {
@@ -900,5 +893,14 @@ describe('agyKillAfterMs', () => {
     ['an overflowing duration', `${'9'.repeat(400)}h`],
   ])('falls back to the default ceiling for %s', (_label, printTimeout) => {
     expect(agyKillAfterMs(printTimeout)).toBe(AGY_LIMITS.DEFAULT_CEILING_MS);
+  });
+});
+
+describe('printTimeoutSchema', () => {
+  it.each([
+    '90s', '15m', '1h', '2h30m', '2.5h', '1m30.5s', '500ms', '0', '0s',
+    '', 'abc', 'h', '1habc', '+3h', '1h30', '.5h', '600', '90 s', ' 90s', '1us', '-1h',
+  ])('accepts %j exactly when the ceiling parser reads it', (printTimeout) => {
+    expect(printTimeoutSchema.safeParse(printTimeout).success).toBe(printTimeoutMs(printTimeout) !== undefined);
   });
 });
