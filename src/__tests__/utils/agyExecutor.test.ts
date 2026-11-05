@@ -42,6 +42,7 @@ import {
   formatAgyUsageLine,
   formatConversationLine,
   agyKillAfterMs,
+  printTimeoutSchema,
 } from '../../utils/agyExecutor.js';
 import { CLI, MODELS, ERROR_MESSAGES, AGY_LIMITS } from '../../constants.js';
 
@@ -279,12 +280,23 @@ describe('executeAgyCLI', () => {
       expect(mockCacheResponse).not.toHaveBeenCalled();
     });
 
-    it('returns an empty answer without caching it', async () => {
+    it.each([
+      ['an empty answer', textEnvelope('')],
+      ['a whitespace-only answer', textEnvelope(' \n ')],
+    ])('throws AGY_EMPTY_ANSWER with the conversation to resume for %s, and caches nothing', async (_label, stdout) => {
       mockIsCacheEnabled.mockReturnValue(true);
+      mockExecuteCommand.mockResolvedValue(stdout);
+
+      await expect(executeAgyCLI('test', {})).rejects.toThrow(new Error(
+        `${ERROR_MESSAGES.AGY_EMPTY_ANSWER} [GEMINI_CONVERSATION_ID=conv-abc]`
+      ));
+      expect(mockCacheResponse).not.toHaveBeenCalled();
+    });
+
+    it('throws AGY_EMPTY_ANSWER for an empty changeMode answer instead of reporting no edits', async () => {
       mockExecuteCommand.mockResolvedValue(textEnvelope(''));
 
-      expect(await executeAgyCLI('test', {})).toBe('');
-      expect(mockCacheResponse).not.toHaveBeenCalled();
+      await expect(executeAgyCLI('test', { changeMode: true })).rejects.toThrow(ERROR_MESSAGES.AGY_EMPTY_ANSWER);
     });
 
     it('throws AGY_STATUS_ERROR with the envelope error text', async () => {
@@ -313,13 +325,24 @@ describe('executeAgyCLI', () => {
         .rejects.toThrow(`${ERROR_MESSAGES.AGY_DENIED_ACTIONS}: RunCommand (command)`);
     });
 
-    it('throws CHANGEMODE_DENIED_ACTIONS, not the yolo advice, when changeMode tried to write the file', async () => {
+    it('throws CHANGEMODE_DENIED_ACTIONS, not the yolo advice, when changeMode had an action denied', async () => {
       mockExecuteCommand.mockResolvedValue(textEnvelope('', {
         denied_actions: [{ action: 'write_file', display_name: 'EditFile' }],
       }));
 
       await expect(executeAgyCLI('test', { changeMode: true }))
         .rejects.toThrow(`${ERROR_MESSAGES.CHANGEMODE_DENIED_ACTIONS}: EditFile (write_file)`);
+    });
+
+    it('names a denied shell command in changeMode without claiming Gemini acted on the files', async () => {
+      mockExecuteCommand.mockResolvedValue(textEnvelope('', {
+        denied_actions: [{ action: 'command', display_name: 'RunCommand' }],
+      }));
+
+      await expect(executeAgyCLI('test', { changeMode: true })).rejects.toThrow(new Error(
+        'changeMode returned no OLD/NEW edits. Ask again for the change as OLD/NEW edits, without yolo. ' +
+        'Denied: RunCommand (command)'
+      ));
     });
 
     it('returns changeMode OLD/NEW text from the response for parsing', async () => {
@@ -623,6 +646,35 @@ describe('executeAgyCLI json mode', () => {
     expect(mockCacheResponse).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ['no structured_output', { structured_output: null }],
+    ['a structured_output replayed without a schema', { structured_output: { ok: true } }],
+  ])('never caches an envelope with an empty response and %s', async (_label, overrides) => {
+    mockIsCacheEnabled.mockReturnValue(true);
+    const raw = envelopeLine({ response: '', ...overrides });
+    mockExecuteCommand.mockResolvedValue(raw);
+
+    expect(await executeAgyCLI('test', { outputFormat: 'json' })).toBe(raw);
+    expect(mockCacheResponse).not.toHaveBeenCalled();
+  });
+
+  it('caches an envelope whose only answer is this call\'s schema output', async () => {
+    mockIsCacheEnabled.mockReturnValue(true);
+    const raw = envelopeLine({ response: '' });
+    mockExecuteCommand.mockResolvedValue(raw);
+
+    await executeAgyCLI('test', { outputFormat: 'json', jsonSchema: '{"type":"object"}' });
+
+    expect(mockCacheResponse).toHaveBeenCalledWith('mock-cache-key', raw);
+  });
+
+  it('returns a SUCCESS envelope with an empty answer for its json caller to report', async () => {
+    const raw = envelopeLine({ response: '', structured_output: null });
+    mockExecuteCommand.mockResolvedValue(raw);
+
+    expect(await executeAgyCLI('test', { outputFormat: 'json' })).toBe(raw);
+  });
+
   it('resolves when actions were denied but this call\'s schema answer came back', async () => {
     const raw = envelopeLine({ response: '', denied_actions: [{ action: 'command', display_name: 'RunCommand' }] });
     mockExecuteCommand.mockResolvedValue(raw);
@@ -840,6 +892,11 @@ describe('agyKillAfterMs', () => {
     ['90s', 90_000],
     ['15m', 15 * 60_000],
     ['1h', 60 * 60_000],
+    ['2h30m', 150 * 60_000],
+    ['1h30m', 90 * 60_000],
+    ['2.5h', 150 * 60_000],
+    ['1m30.5s', 90_500],
+    ['500ms', 500],
   ])('limits a %s print timeout to it plus the margin', (printTimeout, timeoutMs) => {
     expect(agyKillAfterMs(printTimeout)).toBe(timeoutMs + AGY_LIMITS.CEILING_MARGIN_MS);
   });
@@ -847,12 +904,27 @@ describe('agyKillAfterMs', () => {
   it.each([
     ['no print timeout', undefined],
     ['an empty value', ''],
-    ['garbage', 'soon'],
-    ['a compound duration', '1m30s'],
-    ['a zero timeout, which agy reads as no limit', '0s'],
+    ['garbage', 'abc'],
+    ['a unit with no amount', 'h'],
+    ['a duration followed by garbage', '1habc'],
+    ['a zero timeout, which agy reads as no limit', '0'],
+    ['a zero duration', '0s'],
+    ['a compound zero duration', '0h0m'],
     ['a bare number', '600'],
     ['an overflowing duration', `${'9'.repeat(400)}h`],
   ])('falls back to the default ceiling for %s', (_label, printTimeout) => {
     expect(agyKillAfterMs(printTimeout)).toBe(AGY_LIMITS.DEFAULT_CEILING_MS);
+  });
+});
+
+describe('printTimeoutSchema', () => {
+  it.each(['90s', '15m', '1h', '2h30m', '2.5h', '1m30.5s', '500ms', '0', '0s'])('accepts %j', (printTimeout) => {
+    expect(printTimeoutSchema.safeParse(printTimeout).success).toBe(true);
+  });
+
+  it.each([
+    '', 'abc', 'h', '1habc', '+3h', '-1h', '1h30', '.5h', '600', '1us', '90 s', ' 90s',
+  ])('rejects %j', (printTimeout) => {
+    expect(printTimeoutSchema.safeParse(printTimeout).success).toBe(false);
   });
 });
