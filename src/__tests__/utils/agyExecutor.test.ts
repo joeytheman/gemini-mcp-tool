@@ -42,7 +42,6 @@ import {
   formatAgyUsageLine,
   formatConversationLine,
   agyKillAfterMs,
-  printTimeoutMs,
   printTimeoutSchema,
 } from '../../utils/agyExecutor.js';
 import { CLI, MODELS, ERROR_MESSAGES, AGY_LIMITS } from '../../constants.js';
@@ -647,6 +646,28 @@ describe('executeAgyCLI json mode', () => {
     expect(mockCacheResponse).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ['no structured_output', { structured_output: null }],
+    ['a structured_output replayed without a schema', { structured_output: { ok: true } }],
+  ])('never caches an envelope with an empty response and %s', async (_label, overrides) => {
+    mockIsCacheEnabled.mockReturnValue(true);
+    const raw = envelopeLine({ response: '', ...overrides });
+    mockExecuteCommand.mockResolvedValue(raw);
+
+    expect(await executeAgyCLI('test', { outputFormat: 'json' })).toBe(raw);
+    expect(mockCacheResponse).not.toHaveBeenCalled();
+  });
+
+  it('caches an envelope whose only answer is this call\'s schema output', async () => {
+    mockIsCacheEnabled.mockReturnValue(true);
+    const raw = envelopeLine({ response: '' });
+    mockExecuteCommand.mockResolvedValue(raw);
+
+    await executeAgyCLI('test', { outputFormat: 'json', jsonSchema: '{"type":"object"}' });
+
+    expect(mockCacheResponse).toHaveBeenCalledWith('mock-cache-key', raw);
+  });
+
   it('returns a SUCCESS envelope with an empty answer for its json caller to report', async () => {
     const raw = envelopeLine({ response: '', structured_output: null });
     mockExecuteCommand.mockResolvedValue(raw);
@@ -897,10 +918,13 @@ describe('agyKillAfterMs', () => {
 });
 
 describe('printTimeoutSchema', () => {
+  it.each(['90s', '15m', '1h', '2h30m', '2.5h', '1m30.5s', '500ms', '0', '0s'])('accepts %j', (printTimeout) => {
+    expect(printTimeoutSchema.safeParse(printTimeout).success).toBe(true);
+  });
+
   it.each([
-    '90s', '15m', '1h', '2h30m', '2.5h', '1m30.5s', '500ms', '0', '0s',
-    '', 'abc', 'h', '1habc', '+3h', '1h30', '.5h', '600', '90 s', ' 90s', '1us', '-1h',
-  ])('accepts %j exactly when the ceiling parser reads it', (printTimeout) => {
-    expect(printTimeoutSchema.safeParse(printTimeout).success).toBe(printTimeoutMs(printTimeout) !== undefined);
+    '', 'abc', 'h', '1habc', '+3h', '-1h', '1h30', '.5h', '600', '1us', '90 s', ' 90s',
+  ])('rejects %j', (printTimeout) => {
+    expect(printTimeoutSchema.safeParse(printTimeout).success).toBe(false);
   });
 });

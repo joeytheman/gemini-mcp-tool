@@ -71,8 +71,8 @@ const PRINT_TIMEOUT_PATTERN = new RegExp(`^(?:0|(?:${DURATION_TERM.source})+)$`)
 
 export const printTimeoutSchema = z.string().regex(PRINT_TIMEOUT_PATTERN, ERROR_MESSAGES.INVALID_PRINT_TIMEOUT);
 
-/** Milliseconds (0 is agy's "no limit"), or undefined for a value the tool schemas reject. */
-export function printTimeoutMs(printTimeout: string): number | undefined {
+/** Milliseconds (0 is agy's "no limit"), or undefined for a value printTimeoutSchema rejects. */
+function printTimeoutMs(printTimeout: string): number | undefined {
   if (!PRINT_TIMEOUT_PATTERN.test(printTimeout)) return undefined;
   return [...printTimeout.matchAll(DURATION_TERM)].reduce(
     (total, [, amount, unit]) => total + Number(amount) * DURATION_UNIT_MS[unit as keyof typeof DURATION_UNIT_MS],
@@ -339,6 +339,16 @@ export function toAgyJsonSchema(schema: ZodType): Record<string, unknown> {
 }
 
 /**
+ * A resumed turn replays the previous turn's structured_output, so it only
+ * counts as this call's answer when this call passed a schema.
+ */
+function hasAnswer(envelope: AgyJsonEnvelope, opts: AgyCLIOptions): boolean {
+  const hasStructuredAnswer = Boolean(opts.jsonSchema) &&
+    envelope.structured_output !== undefined && envelope.structured_output !== null;
+  return Boolean(envelope.response?.trim()) || hasStructuredAnswer;
+}
+
+/**
  * Validate a run before it is cached or returned. Throws for every failure
  * mode agy signals inside an exit-0 envelope.
  */
@@ -363,13 +373,8 @@ function verifyJsonEnvelope(stdout: string, opts: AgyCLIOptions): AgyJsonEnvelop
     );
   }
 
-  // A resumed turn replays the previous turn's structured_output, so it only
-  // counts as this call's answer when this call passed a schema.
-  const hasStructuredAnswer = Boolean(opts.jsonSchema) &&
-    envelope.structured_output !== undefined && envelope.structured_output !== null;
-  const hasContent = Boolean(envelope.response?.trim()) || hasStructuredAnswer;
   const denied = deniedActionsSummary(envelope);
-  if (!hasContent && denied) {
+  if (!hasAnswer(envelope, opts) && denied) {
     // changeMode asks for edits back, so yolo (letting Gemini write the files) is the wrong remedy.
     const message = opts.changeMode ? ERROR_MESSAGES.CHANGEMODE_DENIED_ACTIONS : ERROR_MESSAGES.AGY_DENIED_ACTIONS;
     throw new Error(`${message}: ${denied}`);
@@ -487,7 +492,7 @@ ${processedPrompt}
     const envelope = verifyJsonEnvelope(result, opts);
 
     if (isJsonMode(opts)) {
-      if (cacheKey) cacheResponse(cacheKey, result);
+      if (cacheKey && hasAnswer(envelope, opts)) cacheResponse(cacheKey, result);
       return result;
     }
 
