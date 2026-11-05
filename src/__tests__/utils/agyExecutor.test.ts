@@ -32,15 +32,6 @@ vi.mock('../../utils/chunkCache.js', () => ({
   getChunks: vi.fn().mockReturnValue(null),
 }));
 
-const mockRecover = vi.fn();
-vi.mock('../../utils/agyTranscriptRecovery.js', () => ({
-  isRecoverableEmptyOutput: (s: string) => {
-    const t = s.trim();
-    return t === '' || t === 'Error: timed out waiting for response';
-  },
-  recoverFromTranscript: (...args: any[]) => mockRecover(...args),
-}));
-
 import {
   executeAgyCLI,
   executeAgyJson,
@@ -53,13 +44,33 @@ import {
 } from '../../utils/agyExecutor.js';
 import { CLI, MODELS, ERROR_MESSAGES } from '../../constants.js';
 
+const ENVELOPE = {
+  conversation_id: 'conv-abc',
+  status: 'SUCCESS',
+  response: 'plain answer',
+  structured_output: { ok: true },
+  num_turns: 2,
+  duration_seconds: 12.5,
+  usage: { input_tokens: 100, output_tokens: 20, thinking_tokens: 5, cache_read_tokens: 0, total_tokens: 125 },
+  denied_actions: [],
+};
+
+function envelopeLine(overrides: Record<string, unknown> = {}): string {
+  return JSON.stringify({ ...ENVELOPE, ...overrides });
+}
+
+/** The envelope agy prints for a text call: an answer and no structured output. */
+function textEnvelope(response: string, overrides: Record<string, unknown> = {}): string {
+  return envelopeLine({ response, structured_output: null, ...overrides });
+}
+
 describe('executeAgyCLI', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockIsCacheEnabled.mockReturnValue(false);
     mockGenerateCacheKey.mockReturnValue('mock-cache-key');
     mockGetCachedResponse.mockReturnValue(undefined);
-    mockExecuteCommand.mockResolvedValue('Gemini response');
+    mockExecuteCommand.mockResolvedValue(textEnvelope('Gemini response'));
   });
 
   describe('argument building', () => {
@@ -69,7 +80,7 @@ describe('executeAgyCLI', () => {
       expect(MODELS.DEFAULT).toBe('Gemini 4 Argon (High)');
       expect(mockExecuteCommand).toHaveBeenCalledWith(
         CLI.COMMANDS.AGY,
-        [CLI.FLAGS.MODEL, MODELS.DEFAULT, CLI.FLAGS.PRINT, 'test'],
+        [CLI.FLAGS.MODEL, MODELS.DEFAULT, CLI.FLAGS.OUTPUT_FORMAT, 'json', CLI.FLAGS.PRINT, 'test'],
         undefined,
         undefined
       );
@@ -120,6 +131,8 @@ describe('executeAgyCLI', () => {
         'src',
         CLI.FLAGS.ADD_DIR,
         'lib',
+        CLI.FLAGS.OUTPUT_FORMAT,
+        'json',
         CLI.FLAGS.PRINT,
         'test',
       ]);
@@ -152,6 +165,8 @@ describe('executeAgyCLI', () => {
     });
 
     it('should map conversation IDs to conversation flag', async () => {
+      mockExecuteCommand.mockResolvedValue(textEnvelope('resumed', { conversation_id: 'conversation-123' }));
+
       await executeAgyCLI('test', { resume: 'conversation-123' });
 
       const args = mockExecuteCommand.mock.calls[0][1];
@@ -228,53 +243,76 @@ describe('executeAgyCLI', () => {
     });
   });
 
-  describe('output recovery', () => {
-    it('recovers from the transcript when stdout is empty', async () => {
+  describe('text answers from the JSON envelope', () => {
+    it('returns the trimmed envelope response as the text answer', async () => {
+      mockExecuteCommand.mockResolvedValue(textEnvelope('STEP-ONE\n\na real answer\n'));
+
+      expect(await executeAgyCLI('test', {})).toBe('STEP-ONE\n\na real answer');
+    });
+
+    it('throws AGY_JSON_PARSE when agy printed nothing', async () => {
       mockExecuteCommand.mockResolvedValue('');
-      mockRecover.mockReturnValue('RECOVERED ANSWER');
 
-      const result = await executeAgyCLI('test', {});
-
-      expect(result).toBe('RECOVERED ANSWER');
-      expect(mockRecover).toHaveBeenCalled();
+      await expect(executeAgyCLI('test', {})).rejects.toThrow(ERROR_MESSAGES.AGY_JSON_PARSE);
     });
 
-    it('recovers when stdout is the timeout sentinel', async () => {
-      mockExecuteCommand.mockResolvedValue('Error: timed out waiting for response');
-      mockRecover.mockReturnValue('RECOVERED ANSWER');
-
-      const result = await executeAgyCLI('test', {});
-
-      expect(result).toBe('RECOVERED ANSWER');
-    });
-
-    it('throws AGY_NO_OUTPUT for the timeout sentinel when recovery fails', async () => {
+    it('throws AGY_NO_OUTPUT for the timeout sentinel and caches nothing', async () => {
       mockIsCacheEnabled.mockReturnValue(true);
       mockExecuteCommand.mockResolvedValue('Error: timed out waiting for response');
-      mockRecover.mockReturnValue(null);
 
       await expect(executeAgyCLI('test', {})).rejects.toThrow(ERROR_MESSAGES.AGY_NO_OUTPUT);
       expect(mockCacheResponse).not.toHaveBeenCalled();
     });
 
-    it('returns empty (soft) and does not cache for genuinely empty output without recovery', async () => {
+    it('returns an empty answer without caching it', async () => {
       mockIsCacheEnabled.mockReturnValue(true);
-      mockExecuteCommand.mockResolvedValue('');
-      mockRecover.mockReturnValue(null);
+      mockExecuteCommand.mockResolvedValue(textEnvelope(''));
 
-      const result = await executeAgyCLI('test', {});
-
-      expect(result).toBe('');
+      expect(await executeAgyCLI('test', {})).toBe('');
       expect(mockCacheResponse).not.toHaveBeenCalled();
     });
 
-    it('does not attempt recovery for normal output', async () => {
-      mockExecuteCommand.mockResolvedValue('a real answer');
+    it('throws AGY_STATUS_ERROR with the envelope error text', async () => {
+      mockExecuteCommand.mockResolvedValue(textEnvelope('', { status: 'ERROR', error: 'model unavailable' }));
 
-      const result = await executeAgyCLI('test', {});
+      await expect(executeAgyCLI('test', {}))
+        .rejects.toThrow(`${ERROR_MESSAGES.AGY_STATUS_ERROR}: model unavailable`);
+    });
 
-      expect(result).toBe('a real answer');
-      expect(mockRecover).not.toHaveBeenCalled();
+    it('throws AGY_DENIED_ACTIONS when an empty answer came with denied actions', async () => {
+      mockExecuteCommand.mockResolvedValue(textEnvelope('', {
+        denied_actions: [{ action: 'command', display_name: 'RunCommand' }],
+      }));
+
+      await expect(executeAgyCLI('test', {}))
+        .rejects.toThrow(`${ERROR_MESSAGES.AGY_DENIED_ACTIONS}: RunCommand (command)`);
+    });
+
+    it('throws CHANGEMODE_DENIED_ACTIONS, not the yolo advice, when changeMode tried to write the file', async () => {
+      mockExecuteCommand.mockResolvedValue(textEnvelope('', {
+        denied_actions: [{ action: 'write_file', display_name: 'EditFile' }],
+      }));
+
+      await expect(executeAgyCLI('test', { changeMode: true }))
+        .rejects.toThrow(`${ERROR_MESSAGES.CHANGEMODE_DENIED_ACTIONS}: EditFile (write_file)`);
+    });
+
+    it('returns changeMode OLD/NEW text from the response for parsing', async () => {
+      const edits = `**FILE: src/a.ts:10**
+\`\`\`
+OLD:
+const x = 1;
+NEW:
+const x = 2;
+\`\`\``;
+      mockExecuteCommand.mockResolvedValue(textEnvelope(edits));
+
+      const result = await executeAgyCLI('test', { changeMode: true });
+
+      expect(result).toBe(edits);
+      const formatted = await processChangeModeOutput(result);
+      expect(formatted).toContain('[CHANGEMODE OUTPUT');
+      expect(formatted).toContain('const x = 2;');
     });
   });
 
@@ -300,7 +338,7 @@ describe('executeAgyCLI', () => {
     it('should cache successful responses when cache is enabled', async () => {
       mockIsCacheEnabled.mockReturnValue(true);
       mockGetCachedResponse.mockReturnValue(undefined);
-      mockExecuteCommand.mockResolvedValue('fresh result');
+      mockExecuteCommand.mockResolvedValue(textEnvelope('fresh result'));
 
       await executeAgyCLI('test', {});
 
@@ -310,7 +348,7 @@ describe('executeAgyCLI', () => {
     it('should not cache changeMode responses', async () => {
       mockIsCacheEnabled.mockReturnValue(true);
       mockGetCachedResponse.mockReturnValue(undefined);
-      mockExecuteCommand.mockResolvedValue('edit result');
+      mockExecuteCommand.mockResolvedValue(textEnvelope('edit result'));
 
       await executeAgyCLI('test', { changeMode: true });
 
@@ -482,21 +520,6 @@ new
   });
 });
 
-const ENVELOPE = {
-  conversation_id: 'conv-abc',
-  status: 'SUCCESS',
-  response: 'plain answer',
-  structured_output: { ok: true },
-  num_turns: 2,
-  duration_seconds: 12.5,
-  usage: { input_tokens: 100, output_tokens: 20, thinking_tokens: 5, cache_read_tokens: 0, total_tokens: 125 },
-  denied_actions: [],
-};
-
-function envelopeLine(overrides: Record<string, unknown> = {}): string {
-  return JSON.stringify({ ...ENVELOPE, ...overrides });
-}
-
 describe('executeAgyCLI json mode', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -548,12 +571,11 @@ describe('executeAgyCLI json mode', () => {
       .rejects.toThrow('--effort is not supported for model "Gemini 3.8 Flash (High)"');
   });
 
-  it('throws AGY_JSON_PARSE for empty stdout and never runs transcript recovery', async () => {
+  it('throws AGY_JSON_PARSE for empty stdout', async () => {
     mockExecuteCommand.mockResolvedValue('');
 
     await expect(executeAgyCLI('test', { outputFormat: 'json' }))
       .rejects.toThrow(ERROR_MESSAGES.AGY_JSON_PARSE);
-    expect(mockRecover).not.toHaveBeenCalled();
   });
 
   it('throws AGY_NO_OUTPUT for the timeout sentinel', async () => {
@@ -642,11 +664,12 @@ describe('option validation', () => {
     expect(args).toContain('medium');
   });
 
-  it('leaves text mode arguments unchanged when outputFormat is text', async () => {
-    await executeAgyCLI('test', { outputFormat: 'text' });
+  it('asks agy for its JSON envelope when the caller wants text', async () => {
+    mockExecuteCommand.mockResolvedValue(textEnvelope('plain answer'));
 
+    expect(await executeAgyCLI('test', { outputFormat: 'text' })).toBe('plain answer');
     expect(mockExecuteCommand.mock.calls[0][1]).toEqual([
-      CLI.FLAGS.MODEL, MODELS.DEFAULT, CLI.FLAGS.PRINT, 'test',
+      CLI.FLAGS.MODEL, MODELS.DEFAULT, CLI.FLAGS.OUTPUT_FORMAT, 'json', CLI.FLAGS.PRINT, 'test',
     ]);
   });
 });
@@ -667,13 +690,11 @@ describe('conversation resolution', () => {
     expect(args).not.toContain(CLI.FLAGS.CONTINUE);
   });
 
-  it('hands the explicit conversation id to transcript recovery', async () => {
-    mockExecuteCommand.mockResolvedValue('');
-    mockRecover.mockReturnValue('RECOVERED');
+  it('throws CONVERSATION_NOT_RESUMED when a text call started a new conversation instead', async () => {
+    mockExecuteCommand.mockResolvedValue(textEnvelope('an answer', { conversation_id: 'conv-other' }));
 
-    await executeAgyCLI('test', { conversationId: 'conv-abc' });
-
-    expect(mockRecover).toHaveBeenCalledWith(expect.objectContaining({ conversationId: 'conv-abc' }));
+    await expect(executeAgyCLI('test', { conversationId: 'conv-abc' }))
+      .rejects.toThrow(`${ERROR_MESSAGES.CONVERSATION_NOT_RESUMED} conv-abc`);
   });
 
   it.each([

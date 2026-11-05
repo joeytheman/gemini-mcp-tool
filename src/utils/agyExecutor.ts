@@ -15,7 +15,6 @@ import { chunkChangeModeEdits } from './changeModeChunker.js';
 import { cacheChunks, getChunks } from './chunkCache.js';
 import { generateCacheKey, getCachedResponse, cacheResponse, isCacheEnabled } from './responseCache.js';
 import { normalizeList, resolveFileReferences, isFilesystemRoot } from './fileReferences.js';
-import { recoverFromTranscript, isRecoverableEmptyOutput } from './agyTranscriptRecovery.js';
 
 export interface AgyCLIOptions {
   model?: string;
@@ -196,12 +195,11 @@ function buildAgyArgs(opts: AgyCLIOptions, prompt: string, refDirs: string[]): s
     args.push(CLI.FLAGS.PRINT_TIMEOUT, opts.printTimeout);
   }
 
-  if (isJsonMode(opts)) {
-    args.push(CLI.FLAGS.OUTPUT_FORMAT, CLI.DEFAULTS.OUTPUT_FORMAT_JSON);
-    // The schema is passed inline (~2 KB); agy takes it as a flag value.
-    if (opts.jsonSchema) {
-      args.push(CLI.FLAGS.JSON_SCHEMA, opts.jsonSchema);
-    }
+  // Every call reads its answer from the JSON envelope, whatever the caller asked for.
+  args.push(CLI.FLAGS.OUTPUT_FORMAT, CLI.DEFAULTS.OUTPUT_FORMAT_JSON);
+  // The schema is passed inline (~2 KB); agy takes it as a flag value.
+  if (opts.jsonSchema) {
+    args.push(CLI.FLAGS.JSON_SCHEMA, opts.jsonSchema);
   }
 
   args.push(...resolveConversationArgs(opts));
@@ -312,10 +310,10 @@ export function toAgyJsonSchema(schema: ZodType): Record<string, unknown> {
 }
 
 /**
- * Validate a json-mode run before it is cached or returned. Throws for every
- * failure mode agy signals inside an exit-0 envelope.
+ * Validate a run before it is cached or returned. Throws for every failure
+ * mode agy signals inside an exit-0 envelope.
  */
-function verifyJsonEnvelope(stdout: string, opts: AgyCLIOptions): void {
+function verifyJsonEnvelope(stdout: string, opts: AgyCLIOptions): AgyJsonEnvelope {
   if (stdout.trim() === AGY_INTERNAL.TIMEOUT_SENTINEL) {
     throw new Error(ERROR_MESSAGES.AGY_NO_OUTPUT);
   }
@@ -340,8 +338,12 @@ function verifyJsonEnvelope(stdout: string, opts: AgyCLIOptions): void {
     (envelope.structured_output !== undefined && envelope.structured_output !== null);
   const denied = deniedActionsSummary(envelope);
   if (!hasContent && denied) {
-    throw new Error(`${ERROR_MESSAGES.AGY_DENIED_ACTIONS}: ${denied}`);
+    // changeMode asks for edits back, so yolo (letting Gemini write the files) is the wrong remedy.
+    const message = opts.changeMode ? ERROR_MESSAGES.CHANGEMODE_DENIED_ACTIONS : ERROR_MESSAGES.AGY_DENIED_ACTIONS;
+    throw new Error(`${message}: ${denied}`);
   }
+
+  return envelope;
 }
 
 export async function executeAgyCLI(
@@ -445,47 +447,23 @@ ${processedPrompt}
 
   const args = buildAgyArgs(opts, processedPrompt, refDirs);
 
-  const runStartMs = Date.now();
   try {
     const result = await executeCommand(CLI.COMMANDS.AGY, args, onProgress, opts.cwd);
+    const envelope = verifyJsonEnvelope(result, opts);
 
-    // json mode carries its own failure signalling in the envelope, so it is
-    // verified here instead of going through transcript recovery.
     if (isJsonMode(opts)) {
-      verifyJsonEnvelope(result, opts);
       if (cacheKey) cacheResponse(cacheKey, result);
       return result;
     }
 
-    // agy can exit 0 with empty/timeout stdout while the real answer is only in
-    // its transcript. Recover BEFORE caching or changeMode parsing.
-    let finalResult = result;
-    if (isRecoverableEmptyOutput(result)) {
-      Logger.debug('agy returned empty/timeout output; attempting transcript recovery');
-      const recovered = recoverFromTranscript({
-        cwd: opts.cwd,
-        conversationId: requestedConversationId(opts),
-        runStartMs,
-      });
-      if (recovered) {
-        finalResult = recovered;
-      } else if (result.trim() === AGY_INTERNAL.TIMEOUT_SENTINEL) {
-        // The timeout sentinel is never a real answer; fail loud.
-        throw new Error(ERROR_MESSAGES.AGY_NO_OUTPUT);
-      } else {
-        // Genuinely empty output (e.g. a changeMode request the model decided
-        // needs no edits). Preserve the legacy soft result rather than erroring.
-        finalResult = '';
-      }
+    const answer = (envelope.response ?? '').trim();
+    // An empty answer (a changeMode request needing no edits) is returned but
+    // never cached: an empty string would crash the size-bounded LRU (size 0).
+    if (cacheKey && answer) {
+      cacheResponse(cacheKey, answer);
     }
 
-    // Never cache an empty result — it is not a useful answer and an empty
-    // string would crash the size-bounded LRU (size 0).
-    if (cacheKey && finalResult) {
-      cacheResponse(cacheKey, finalResult);
-    }
-
-    return finalResult;
+    return answer;
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     if (errorMessage.includes('ENOENT') || errorMessage.includes('command not found')) {

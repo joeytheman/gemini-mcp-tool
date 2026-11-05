@@ -10,7 +10,7 @@ export const ERROR_MESSAGES = {
   NO_PROMPT_PROVIDED: "Please provide a prompt for analysis. Use @ syntax to include files (e.g., '@largefile.js explain what this does') or ask general questions",
   UNSUPPORTED_AGY_OPTIONS: "Unsupported Antigravity CLI option(s)",
   INVALID_RESUME: "resume must be true, latest, continue, or a non-empty conversation ID.",
-  AGY_NO_OUTPUT: "Antigravity CLI (`agy`) returned no output (it may have timed out resolving a file reference) and no recoverable transcript was found. Ensure any @referenced files exist under the working directory or an includeDirectories entry, narrow the prompt, or increase printTimeout.",
+  AGY_NO_OUTPUT: "Antigravity CLI (`agy`) returned no output (it may have timed out resolving a file reference). Ensure any @referenced files exist under the working directory or an includeDirectories entry, narrow the prompt, or increase printTimeout.",
   UNSAFE_ROOT_YOLO: "Refusing to run agy with yolo (`--dangerously-skip-permissions`) when workingDirectory is a filesystem root. Set workingDirectory to a specific project directory.",
   UNSUPPORTED_OUTPUT_FORMAT: "outputFormat must be 'text' or 'json'. Antigravity CLI has no stream-json mode.",
   JSON_SCHEMA_REQUIRES_JSON: "jsonSchema requires outputFormat: 'json'.",
@@ -18,6 +18,7 @@ export const ERROR_MESSAGES = {
   AGY_JSON_PARSE: "Could not parse the Antigravity CLI JSON envelope",
   AGY_STATUS_ERROR: "Antigravity CLI returned status ERROR",
   AGY_DENIED_ACTIONS: "Antigravity CLI produced no response because it denied required actions. Retry with `yolo: true`, or allow the actions in the Antigravity `permissions.allow` settings. Denied",
+  CHANGEMODE_DENIED_ACTIONS: "changeMode returned no OLD/NEW edits: Gemini tried to act on the files itself and agy denied it. Ask again for the change as OLD/NEW edits. Denied",
   INVALID_CONVERSATION_ID: "conversationId must be a non-empty agy conversation ID.",
   CONVERSATION_NOT_RESUMED: "agy did not resume conversation",
   INVALID_WORKING_DIRECTORY: "workingDirectory must be an absolute path to an existing directory that is not a filesystem root",
@@ -32,18 +33,12 @@ export const ERROR_MESSAGES = {
   SCREEN_REVIEW_BASE_REF: "baseRef does not resolve to a merge base with HEAD in workingDirectory",
 } as const;
 
-// Antigravity CLI internal layout, used ONLY for best-effort output recovery.
-// FRAGILE: pinned to agy 1.0.13 internals — a patch release may rename any of these.
-// All access must degrade to null on mismatch; never throw based on these.
+// Undocumented Antigravity CLI internals. The step store feeds only the
+// "Gemini steps" usage line, so a reader must degrade to null, never throw.
+// Answers come only from agy's documented JSON output.
 export const AGY_INTERNAL = {
   ROOT_SEGMENTS: [".gemini", "antigravity-cli"],
-  LAST_CONVERSATIONS_SEGMENTS: ["cache", "last_conversations.json"],
-  BRAIN_DIR: "brain",
-  TRANSCRIPT_SEGMENTS: [".system_generated", "logs", "transcript.jsonl"],
-  // A transcript record holding the final model answer.
-  TRANSCRIPT_FINAL: { type: "PLANNER_RESPONSE", source: "MODEL", status: "DONE" },
   TIMEOUT_SENTINEL: "Error: timed out waiting for response",
-  DISABLE_RECOVERY_ENV: "AGY_DISABLE_TRANSCRIPT_RECOVERY",
   // agy 1.4.12 keeps each conversation's steps in SQLite; step_type 15 is a model step.
   CONVERSATIONS_DIR: "conversations",
   CONVERSATION_STORE_EXT: ".db",
