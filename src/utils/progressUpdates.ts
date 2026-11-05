@@ -33,24 +33,18 @@ function keepAliveMessage(operationName: string, index: number): string {
  * Keep-alive progress for ONE tool call. Each call owns its timer and output
  * preview, so a call that finishes never silences another call still running
  * in the same server; a silenced call is aborted by the client.
- *
- * Cancelling the request retires its token, and the client logs progress on a
- * retired token as an error, so a cancel stops every notification at once,
- * even while the tool itself is still running.
  */
 export function startProgressUpdates(
   operationName: string,
   progressToken: ProgressToken | undefined,
-  send: SendProgress,
-  signal?: AbortSignal
+  send: SendProgress
 ): ProgressUpdates {
-  if (!progressToken || signal?.aborted) {
+  if (!progressToken) {
     return { recordOutput: () => {}, finish: () => {} };
   }
 
   let latestOutput = '';
   let ticks = 0;
-  let stopped = false;
   void send(progressToken, 0, undefined, `🔍 Starting ${operationName}`);
 
   const interval = setInterval(() => {
@@ -60,22 +54,15 @@ export function startProgressUpdates(
     void send(progressToken, ticks, undefined, preview ? `${base}\n📝 Output: ...${preview}` : base);
   }, PROTOCOL.KEEPALIVE_INTERVAL);
 
-  const stop = () => {
-    stopped = true;
-    clearInterval(interval);
-    signal?.removeEventListener('abort', stop);
-  };
-  signal?.addEventListener('abort', stop, { once: true });
-
   return {
     recordOutput: (output) => { latestOutput = output; },
     finish: (outcome) => {
-      if (stopped) return;
-      stop();
+      clearInterval(interval);
+      const finalProgress = ticks + 1;
       void send(
         progressToken,
-        100,
-        100,
+        finalProgress,
+        finalProgress,
         outcome === 'success' ? `✅ ${operationName} completed successfully` : `❌ ${operationName} failed`
       );
     },

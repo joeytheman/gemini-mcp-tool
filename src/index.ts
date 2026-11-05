@@ -15,10 +15,11 @@ import {
   Prompt,
   GetPromptResult,
   CallToolResult,
+  ServerNotification,
 } from "@modelcontextprotocol/sdk/types.js";
 import { Logger } from "./utils/logger.js";
 import { PROTOCOL, ToolArguments } from "./constants.js";
-import { startProgressUpdates } from "./utils/progressUpdates.js";
+import { startProgressUpdates, type SendProgress } from "./utils/progressUpdates.js";
 
 import { 
   getToolDefinitions, 
@@ -41,44 +42,19 @@ const server = new Server(
 );
 
 
-async function sendNotification(method: string, params: any) {
-  try {
-    await server.notification({ method, params });
-  } catch (error) {
-    Logger.error("notification failed: ", error);
-  }
-}
-
-/**
- * @param progressToken The progress token provided by the client
- * @param progress The current progress value
- * @param total Optional total value
- * @param message Optional status message
- */
-async function sendProgressNotification(
-  progressToken: string | number | undefined,
-  progress: number,
-  total?: number,
-  message?: string
-) {
-  if (!progressToken) return; // Only send if client requested progress
-  
-  try {
-    const params: any = {
-      progressToken,
-      progress
-    };
-    
-    if (total !== undefined) params.total = total; // future cache progress
-    if (message) params.message = message;
-    
-    await server.notification({
-      method: PROTOCOL.NOTIFICATIONS.PROGRESS,
-      params
-    });
-  } catch (error) {
-    Logger.error("Failed to send progress notification:", error);
-  }
+// Request-scoped: the SDK drops it once the request is cancelled, and the
+// client logs progress on a cancelled request's token as an error.
+function progressSender(sendNotification: (notification: ServerNotification) => Promise<void>): SendProgress {
+  return async (progressToken, progress, total, message) => {
+    try {
+      await sendNotification({
+        method: PROTOCOL.NOTIFICATIONS.PROGRESS,
+        params: { progressToken, progress, total, message },
+      });
+    } catch (error) {
+      Logger.error("Failed to send progress notification:", error);
+    }
+  };
 }
 
 // tools/list
@@ -95,7 +71,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest,
     const progressToken = (request.params as any)._meta?.progressToken;
     
     // Start progress updates if client requested them
-    const progress = startProgressUpdates(toolName, progressToken, sendProgressNotification, extra.signal);
+    const progress = startProgressUpdates(toolName, progressToken, progressSender(extra.sendNotification));
     
     try {
       // Get prompt and other parameters from arguments with proper typing

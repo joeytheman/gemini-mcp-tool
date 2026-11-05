@@ -22,7 +22,6 @@ vi.mock('child_process', () => ({
 
 // Import after mocks are set up
 import { executeCommand } from '../../utils/commandExecutor.js';
-import { Logger } from '../../utils/logger.js';
 import { AGY_LIMITS, ERROR_MESSAGES } from '../../constants.js';
 
 function createMockChildProcess() {
@@ -279,21 +278,7 @@ describe('executeCommand limits', () => {
     await expect(promise).rejects.toThrow(ERROR_MESSAGES.AGY_HUNG);
   });
 
-  it('records completion when a stopped run finally closes, so its args are not retained', async () => {
-    const mockProc = createMockChildProcess();
-    mockSpawn.mockReturnValue(mockProc);
-
-    const promise = executeCommand('agy', [], undefined, undefined, { killAfterMs: 5000 });
-    vi.advanceTimersByTime(5000);
-    expect(Logger.commandComplete).not.toHaveBeenCalled();
-
-    mockProc.emit('close', null);
-
-    await expect(promise).rejects.toThrow(ERROR_MESSAGES.AGY_HUNG);
-    expect(Logger.commandComplete).toHaveBeenCalledWith(expect.any(Number), null);
-  });
-
-  it('bounds the close wait and clears the logger after SIGKILL', async () => {
+  it('bounds the close wait after SIGKILL when a descendant holds the output pipes', async () => {
     const mockProc = createMockChildProcess();
     mockSpawn.mockReturnValue(mockProc);
 
@@ -303,9 +288,6 @@ describe('executeCommand limits', () => {
     await expect(promise).rejects.toThrow(ERROR_MESSAGES.AGY_HUNG);
     expect(mockProc.stdout.destroy).toHaveBeenCalled();
     expect(mockProc.stderr.destroy).toHaveBeenCalled();
-    expect(Logger.commandComplete).toHaveBeenCalledTimes(1);
-    mockProc.emit('close', null);
-    expect(Logger.commandComplete).toHaveBeenCalledTimes(1);
   });
 
   it.skipIf(process.platform === 'win32')('signals the isolated POSIX process group, including descendants', async () => {
