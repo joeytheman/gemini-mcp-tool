@@ -4,6 +4,8 @@ import { LIVE_PASS } from '../constants.js';
 
 export type ArtifactFileStatus = 'OK' | 'OUTSIDE' | 'MISSING' | 'EMPTY' | 'STALE';
 
+export const IMAGE_FILE = /\.(png|jpe?g)$/i;
+
 /** Whether a file a pass wrote is inside `artifactDir`, present, non-empty and written during this run. */
 export function checkArtifactFile(absFile: string, artifactDir: string, runStartMs: number): ArtifactFileStatus {
   if (!isWithin(artifactDir, absFile)) return 'OUTSIDE';

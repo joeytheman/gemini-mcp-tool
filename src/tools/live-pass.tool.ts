@@ -15,7 +15,7 @@ import {
 import { bulletList, section, renderUnparsableEnvelope, formatWorkingTreeSection, failWithWorkingTree } from '../utils/agyReport.js';
 import { isWithin, resolveWorkingDirectory, realpathOfExistingPrefix } from '../utils/fileReferences.js';
 import { snapshotWorkingTree, diffWorkingTree, type WorkingTreeDiff } from '../utils/gitStatusGuard.js';
-import { checkArtifactFile } from '../utils/artifactFile.js';
+import { checkArtifactFile, IMAGE_FILE, type ArtifactFileStatus } from '../utils/artifactFile.js';
 import { readCheckout, type Checkout } from '../utils/gitCheckout.js';
 import { formatLayoutEntry, layoutFileName, readLayoutCheck, type LayoutCheck } from '../utils/layoutCheck.js';
 import { buildCaptureScript, parseViewport, saveLayoutFunction } from '../utils/captureScript.js';
@@ -357,7 +357,7 @@ ${brief}`;
 
 // --------------------------------------------------------------- validation
 
-export type FrameStatus = 'OK' | 'MISSING' | 'EMPTY' | 'STALE' | 'OUTSIDE' | 'DUPLICATE';
+export type FrameStatus = ArtifactFileStatus | 'DUPLICATE' | 'NOT_IMAGE';
 
 export interface FrameCheck {
   file: string;
@@ -420,7 +420,7 @@ function readManifestProblems(artifactDir: string, frameCount: number, runStartM
 function listCaptures(artifactDir: string): string[] {
   try {
     return fs.readdirSync(artifactDir)
-      .filter(name => /\.(png|jpe?g)$/i.test(name))
+      .filter(name => IMAGE_FILE.test(name))
       .map(name => path.join(artifactDir, name));
   } catch {
     return [];
@@ -443,8 +443,8 @@ export function validateFrames(
     const expectedName = prescribed.get(targetKey(frame));
     // A second frame pointing at the same file is one screenshot answering two
     // targets — no evidence for either, however good the picture is.
-    const status: FrameStatus = claimedBy.has(absFile)
-      ? 'DUPLICATE'
+    const status: FrameStatus = claimedBy.has(absFile) ? 'DUPLICATE'
+      : !IMAGE_FILE.test(absFile) ? 'NOT_IMAGE'
       : checkArtifactFile(absFile, artifactDir, runStartMs);
     claimedBy.add(absFile);
 

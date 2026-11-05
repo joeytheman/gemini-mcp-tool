@@ -782,6 +782,25 @@ describe('validateFrames', () => {
     expect(validation.notes.join('\n')).toContain(frameFileName(HOME_TARGET));
   });
 
+  it.each([
+    ['a capture file', 'home-default-390x844.capture.js'],
+    ['a layout file', 'home-default-390x844.layout.json'],
+  ])('rejects %s reported as a frame as NOT_IMAGE, and fails the pass', (_label, name) => {
+    const artifactDir = path.join(makeWorkDir(), 'frames');
+    const file = writeFrameFile(artifactDir, name);
+    writeManifest(artifactDir, [{ file }]);
+    const result = makeResult({ frames: [makeFrame({ file })] });
+
+    const validation = validateFrames(result, artifactDir, Date.now(), [HOME_TARGET]);
+    const decision = deriveVerdict({ result, validation, coverage: CLEAN_COVERAGE, deniedActions: '' });
+
+    expect(validation.checks[0].status).toBe('NOT_IMAGE');
+    expect(validation.okFiles).toEqual([]);
+    expect(validation.problems).toEqual([`NOT_IMAGE: ${file} (home / default)`]);
+    expect(decision.verdict).toBe('FAIL');
+    expect(decision.reasons).toEqual([`NOT_IMAGE: ${file} (home / default)`]);
+  });
+
   it('treats a directory reported as a frame as MISSING', () => {
     const artifactDir = path.join(makeWorkDir(), 'frames');
     const file = path.join(artifactDir, 'home-default.png');
