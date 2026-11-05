@@ -41,8 +41,9 @@ import {
   deniedActionsSummary,
   formatAgyUsageLine,
   formatConversationLine,
+  agyKillAfterMs,
 } from '../../utils/agyExecutor.js';
-import { CLI, MODELS, ERROR_MESSAGES } from '../../constants.js';
+import { CLI, MODELS, ERROR_MESSAGES, AGY_LIMITS } from '../../constants.js';
 
 const ENVELOPE = {
   conversation_id: 'conv-abc',
@@ -82,7 +83,8 @@ describe('executeAgyCLI', () => {
         CLI.COMMANDS.AGY,
         [CLI.FLAGS.MODEL, MODELS.DEFAULT, CLI.FLAGS.OUTPUT_FORMAT, 'json', CLI.FLAGS.PRINT, 'test'],
         undefined,
-        undefined
+        undefined,
+        { killAfterMs: AGY_LIMITS.DEFAULT_CEILING_MS, signal: undefined }
       );
     });
 
@@ -202,6 +204,19 @@ describe('executeAgyCLI', () => {
       const args = mockExecuteCommand.mock.calls[0][1];
       expect(args).toContain(CLI.FLAGS.MODEL);
       expect(args).toContain('Gemini 3.8 Flash (Low)');
+    });
+  });
+
+  describe('process limits', () => {
+    it('limits agy to its print timeout plus the margin and passes the request signal', async () => {
+      const controller = new AbortController();
+
+      await executeAgyCLI('test', { printTimeout: '10m', signal: controller.signal });
+
+      expect(mockExecuteCommand.mock.calls[0][4]).toEqual({
+        killAfterMs: 10 * 60_000 + AGY_LIMITS.CEILING_MARGIN_MS,
+        signal: controller.signal,
+      });
     });
   });
 
@@ -817,5 +832,26 @@ describe('envelope rendering', () => {
   it('formats the usage line and the conversation line', () => {
     expect(formatAgyUsageLine(ENVELOPE)).toContain('total 125');
     expect(formatConversationLine('conv-abc')).toBe('[GEMINI_CONVERSATION_ID=conv-abc]');
+  });
+});
+
+describe('agyKillAfterMs', () => {
+  it.each([
+    ['90s', 90_000],
+    ['15m', 15 * 60_000],
+    ['1h', 60 * 60_000],
+  ])('limits a %s print timeout to it plus the margin', (printTimeout, timeoutMs) => {
+    expect(agyKillAfterMs(printTimeout)).toBe(timeoutMs + AGY_LIMITS.CEILING_MARGIN_MS);
+  });
+
+  it.each([
+    ['no print timeout', undefined],
+    ['an empty value', ''],
+    ['garbage', 'soon'],
+    ['a compound duration', '1m30s'],
+    ['a zero timeout, which agy reads as no limit', '0s'],
+    ['a bare number', '600'],
+  ])('falls back to the default ceiling for %s', (_label, printTimeout) => {
+    expect(agyKillAfterMs(printTimeout)).toBe(AGY_LIMITS.DEFAULT_CEILING_MS);
   });
 });

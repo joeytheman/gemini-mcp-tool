@@ -1,13 +1,27 @@
 import { spawn } from "child_process";
 import { Logger } from "./logger.js";
+import { AGY_LIMITS, ERROR_MESSAGES } from "../constants.js";
+
+export interface CommandLimits {
+  /** Stop the process this long after spawn (SIGTERM, then SIGKILL after a grace period). */
+  killAfterMs?: number;
+  /** Stop the process when the caller's request is cancelled. */
+  signal?: AbortSignal;
+}
 
 export async function executeCommand(
   command: string,
   args: string[],
   onProgress?: (newOutput: string) => void,
-  cwd?: string
+  cwd?: string,
+  limits: CommandLimits = {}
 ): Promise<string> {
   return new Promise((resolve, reject) => {
+    if (limits.signal?.aborted) {
+      reject(new Error(ERROR_MESSAGES.AGY_CANCELLED));
+      return;
+    }
+
     const startTime = Date.now();
     Logger.commandExecution(command, args, startTime);
 
@@ -23,6 +37,35 @@ export async function executeCommand(
     const stderrChunks: string[] = [];
     let isResolved = false;
     let resourceExhausted = false;
+    let ceilingTimer: NodeJS.Timeout | undefined;
+    let graceTimer: NodeJS.Timeout | undefined;
+
+    const settle = () => {
+      isResolved = true;
+      clearTimeout(ceilingTimer);
+      limits.signal?.removeEventListener("abort", onAbort);
+    };
+    const stop = (error: Error) => {
+      if (isResolved) return;
+      settle();
+      Logger.error(error.message);
+      childProcess.kill("SIGTERM");
+      graceTimer = setTimeout(() => childProcess.kill("SIGKILL"), AGY_LIMITS.KILL_GRACE_MS);
+      reject(error);
+    };
+    function onAbort() {
+      stop(new Error(ERROR_MESSAGES.AGY_CANCELLED));
+    }
+
+    if (limits.killAfterMs !== undefined) {
+      const limitMs = limits.killAfterMs;
+      ceilingTimer = setTimeout(
+        () => stop(new Error(`${ERROR_MESSAGES.AGY_HUNG}: limit ${Math.round(limitMs / 1000)}s`)),
+        limitMs
+      );
+    }
+    limits.signal?.addEventListener("abort", onAbort, { once: true });
+    childProcess.on("exit", () => clearTimeout(graceTimer));
 
     childProcess.stdout.on("data", (data) => {
       const chunk = data.toString();
@@ -66,14 +109,14 @@ export async function executeCommand(
     });
     childProcess.on("error", (error) => {
       if (!isResolved) {
-        isResolved = true;
+        settle();
         Logger.error(`Process error:`, error);
         reject(new Error(`Failed to spawn command: ${error.message}`));
       }
     });
     childProcess.on("close", (code) => {
       if (!isResolved) {
-        isResolved = true;
+        settle();
         // Join array buffers efficiently
         const stdout = stdoutChunks.join('');
         const stderr = stderrChunks.join('');

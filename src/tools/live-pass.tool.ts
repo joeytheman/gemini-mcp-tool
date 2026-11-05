@@ -736,7 +736,7 @@ export const livePassTool: UnifiedTool = {
     readOnlyHint: false,
     openWorldHint: true,
   },
-  execute: async (args, onProgress) => {
+  execute: async (args, onProgress, signal) => {
     const input = livePassArgsSchema.parse(args);
     const workingDirectory = resolveWorkingDirectory(input.workingDirectory);
     const artifactDir = resolveArtifactDir(workingDirectory, input.artifactDir);
@@ -773,6 +773,7 @@ export const livePassTool: UnifiedTool = {
           cwd: workingDirectory,
           jsonSchema: LIVE_PASS_RESULT_SCHEMA_TEXT,
           noCache: true,
+          signal,
         },
         onProgress
       );

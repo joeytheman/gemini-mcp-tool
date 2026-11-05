@@ -21,6 +21,8 @@ export const ERROR_MESSAGES = {
   CHANGEMODE_DENIED_ACTIONS: "changeMode returned no OLD/NEW edits: Gemini tried to act on the files itself and agy denied it. Ask again for the change as OLD/NEW edits. Denied",
   INVALID_CONVERSATION_ID: "conversationId must be a non-empty agy conversation ID.",
   CONVERSATION_NOT_RESUMED: "agy did not resume conversation",
+  AGY_HUNG: "Antigravity CLI (`agy`) ran past its time limit and was stopped",
+  AGY_CANCELLED: "The request was cancelled, so agy was stopped.",
   INVALID_WORKING_DIRECTORY: "workingDirectory must be an absolute path to an existing directory that is not a filesystem root",
   LIVE_PASS_ARTIFACT_DIR: "artifactDir must be an absolute path strictly inside workingDirectory",
   LIVE_PASS_NO_BRIEF: "brief is required: describe the base URL or app id, the served-branch marker, the seed case, and any navigation hints.",
@@ -31,6 +33,14 @@ export const ERROR_MESSAGES = {
   SCREEN_REVIEW_IMAGE_MISSING: "image does not exist",
   SCREEN_REVIEW_ROUTE_FILE: "plan mode requires routeFile: an absolute path to an existing file inside workingDirectory",
   SCREEN_REVIEW_BASE_REF: "baseRef does not resolve to a merge base with HEAD in workingDirectory",
+} as const;
+
+// How long an agy process may run before it is stopped. agy honours its own
+// --print-timeout; this ceiling exists for runs that hang past it.
+export const AGY_LIMITS = {
+  CEILING_MARGIN_MS: 2 * 60_000,
+  DEFAULT_CEILING_MS: 2 * 60 * 60_000,
+  KILL_GRACE_MS: 10_000,
 } as const;
 
 // Undocumented Antigravity CLI internals. The step store feeds only the

@@ -6,7 +6,8 @@ import {
   MODELS,
   CLI,
   AGY_INTERNAL,
-  LIVE_PASS
+  LIVE_PASS,
+  AGY_LIMITS
 } from '../constants.js';
 
 import { parseChangeModeOutput, validateChangeModeEdits } from './changeModeParser.js';
@@ -34,6 +35,8 @@ export interface AgyCLIOptions {
   conversationId?: string;
   noCache?: boolean;
   cwd?: string;
+  /** Stops agy when the MCP request is cancelled. */
+  signal?: AbortSignal;
 }
 
 export interface AgyUsage {
@@ -60,6 +63,20 @@ export interface AgyJsonEnvelope {
   duration_seconds?: number;
   usage?: AgyUsage;
   denied_actions?: AgyDeniedAction[];
+}
+
+const WHOLE_DURATION = /^(\d+)(s|m|h)$/;
+const DURATION_UNIT_MS = { s: 1000, m: 60_000, h: 3_600_000 } as const;
+
+/**
+ * How long an agy process may run: its print timeout plus a margin, or the
+ * default ceiling when there is no positive whole-unit timeout (agy reads 0 as
+ * "no limit").
+ */
+export function agyKillAfterMs(printTimeout?: string): number {
+  const match = printTimeout?.trim().match(WHOLE_DURATION);
+  const timeoutMs = match ? Number(match[1]) * DURATION_UNIT_MS[match[2] as keyof typeof DURATION_UNIT_MS] : 0;
+  return timeoutMs > 0 ? timeoutMs + AGY_LIMITS.CEILING_MARGIN_MS : AGY_LIMITS.DEFAULT_CEILING_MS;
 }
 
 const AGY_STATUS_SUCCESS = 'SUCCESS';
@@ -451,7 +468,10 @@ ${processedPrompt}
   const args = buildAgyArgs(opts, processedPrompt, refDirs);
 
   try {
-    const result = await executeCommand(CLI.COMMANDS.AGY, args, onProgress, opts.cwd);
+    const result = await executeCommand(CLI.COMMANDS.AGY, args, onProgress, opts.cwd, {
+      killAfterMs: agyKillAfterMs(opts.printTimeout),
+      signal: opts.signal,
+    });
     const envelope = verifyJsonEnvelope(result, opts);
 
     if (isJsonMode(opts)) {

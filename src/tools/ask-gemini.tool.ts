@@ -54,7 +54,7 @@ export const askGeminiTool: UnifiedTool = {
     readOnlyHint: true,
     openWorldHint: true,
   },
-  execute: async (args, onProgress) => {
+  execute: async (args, onProgress, signal) => {
     const {
       prompt, model, sandbox, changeMode, chunkIndex, chunkCacheKey, workingDirectory,
       yolo, approvalMode, outputFormat, jsonSchema, effort, includeDirectories, debug,
@@ -87,6 +87,7 @@ export const askGeminiTool: UnifiedTool = {
       resume: resume as boolean | string | undefined,
       conversationId: conversationId as string | undefined,
       cwd: workingDirectory as string | undefined,
+      signal,
     };
 
     if (outputFormat === CLI.DEFAULTS.OUTPUT_FORMAT_JSON) {

@@ -452,7 +452,7 @@ export const screenReviewTool: UnifiedTool = {
     readOnlyHint: true,
     openWorldHint: true,
   },
-  execute: async (args, onProgress) => {
+  execute: async (args, onProgress, signal) => {
     const input = screenReviewArgsSchema.parse(args);
     const workingDirectory = resolveWorkingDirectory(input.workingDirectory);
     const isPlan = input.mode === 'plan';
@@ -495,6 +495,7 @@ export const screenReviewTool: UnifiedTool = {
           cwd: workingDirectory,
           jsonSchema: isPlan ? SCHEMA_TEXT.plan : SCHEMA_TEXT.review,
           noCache: true,
+          signal,
         },
         onProgress
       );

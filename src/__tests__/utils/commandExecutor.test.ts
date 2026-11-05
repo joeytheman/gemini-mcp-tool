@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { EventEmitter } from 'node:events';
 
 // Mock logger to suppress output
@@ -22,11 +22,13 @@ vi.mock('child_process', () => ({
 
 // Import after mocks are set up
 import { executeCommand } from '../../utils/commandExecutor.js';
+import { AGY_LIMITS, ERROR_MESSAGES } from '../../constants.js';
 
 function createMockChildProcess() {
   const proc = new EventEmitter() as any;
   proc.stdout = new EventEmitter();
   proc.stderr = new EventEmitter();
+  proc.kill = vi.fn();
   return proc;
 }
 
@@ -217,5 +219,90 @@ describe('executeCommand', () => {
     } finally {
       Object.defineProperty(process, 'platform', { value: originalPlatform });
     }
+  });
+});
+
+describe('executeCommand limits', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('sends SIGTERM and rejects AGY_HUNG when the run outlives its limit', async () => {
+    const mockProc = createMockChildProcess();
+    mockSpawn.mockReturnValue(mockProc);
+
+    const promise = executeCommand('agy', [], undefined, undefined, { killAfterMs: 5000 });
+    const rejection = expect(promise).rejects.toThrow(`${ERROR_MESSAGES.AGY_HUNG}: limit 5s`);
+    vi.advanceTimersByTime(5000);
+
+    await rejection;
+    expect(mockProc.kill).toHaveBeenCalledWith('SIGTERM');
+    expect(mockProc.kill).not.toHaveBeenCalledWith('SIGKILL');
+  });
+
+  it('sends SIGKILL after the grace period when the process ignores SIGTERM', async () => {
+    const mockProc = createMockChildProcess();
+    mockSpawn.mockReturnValue(mockProc);
+
+    const promise = executeCommand('agy', [], undefined, undefined, { killAfterMs: 5000 });
+    const rejection = expect(promise).rejects.toThrow(ERROR_MESSAGES.AGY_HUNG);
+    vi.advanceTimersByTime(5000 + AGY_LIMITS.KILL_GRACE_MS);
+
+    await rejection;
+    expect(mockProc.kill.mock.calls).toEqual([['SIGTERM'], ['SIGKILL']]);
+  });
+
+  it('does not SIGKILL a process that exited after SIGTERM', async () => {
+    const mockProc = createMockChildProcess();
+    mockSpawn.mockReturnValue(mockProc);
+
+    const promise = executeCommand('agy', [], undefined, undefined, { killAfterMs: 5000 });
+    const rejection = expect(promise).rejects.toThrow(ERROR_MESSAGES.AGY_HUNG);
+    vi.advanceTimersByTime(5000);
+    mockProc.emit('exit', null, 'SIGTERM');
+    vi.advanceTimersByTime(AGY_LIMITS.KILL_GRACE_MS);
+
+    await rejection;
+    expect(mockProc.kill.mock.calls).toEqual([['SIGTERM']]);
+  });
+
+  it('never stops a run that finished before its limit, and leaves no timer behind', async () => {
+    const mockProc = createMockChildProcess();
+    mockSpawn.mockReturnValue(mockProc);
+
+    const promise = executeCommand('agy', [], undefined, undefined, { killAfterMs: 5000 });
+    mockProc.stdout.emit('data', 'done');
+    mockProc.emit('close', 0);
+    expect(vi.getTimerCount()).toBe(0);
+    vi.advanceTimersByTime(5000 + AGY_LIMITS.KILL_GRACE_MS);
+
+    await expect(promise).resolves.toBe('done');
+    expect(mockProc.kill).not.toHaveBeenCalled();
+  });
+
+  it('sends SIGTERM and rejects AGY_CANCELLED when the request is cancelled', async () => {
+    const mockProc = createMockChildProcess();
+    mockSpawn.mockReturnValue(mockProc);
+    const controller = new AbortController();
+
+    const promise = executeCommand('agy', [], undefined, undefined, { signal: controller.signal });
+    controller.abort();
+
+    await expect(promise).rejects.toThrow(ERROR_MESSAGES.AGY_CANCELLED);
+    expect(mockProc.kill).toHaveBeenCalledWith('SIGTERM');
+  });
+
+  it('never spawns when the request was already cancelled', async () => {
+    const controller = new AbortController();
+    controller.abort();
+
+    await expect(executeCommand('agy', [], undefined, undefined, { signal: controller.signal }))
+      .rejects.toThrow(ERROR_MESSAGES.AGY_CANCELLED);
+    expect(mockSpawn).not.toHaveBeenCalled();
   });
 });
