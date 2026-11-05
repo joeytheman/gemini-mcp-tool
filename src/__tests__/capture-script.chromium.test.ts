@@ -61,8 +61,8 @@ async function open(fixture: string): Promise<void> {
 }
 
 /** browser_run_code_unsafe {filename}: the file's text run as `(<text>)(page)` in a vm holding `page` and the exposed globals. */
-async function runCaptureFile(file: string): Promise<string> {
-  const context: Record<string, unknown> = { page };
+async function runCaptureFile(file: string, runPage: Page = page): Promise<string> {
+  const context: Record<string, unknown> = { page: runPage };
   for (const name of RUN_CODE_EXPOSED_GLOBALS) context[name] = (globalThis as Record<string, unknown>)[name];
   vm.createContext(context);
   context.__fn__ = vm.runInContext('(' + fs.readFileSync(file, 'utf-8') + ')', context);
@@ -78,6 +78,28 @@ async function saveLayout(key: string, file: string, artifactDir: string, width:
   }, saveLayoutFunction(key));
   fs.writeFileSync(file, JSON.stringify(result, null, 2) ?? 'undefined', 'utf-8');
   return readLayoutCheck(file, artifactDir, runStartMs, width);
+}
+
+/** The page, except that every setViewportSize after the screenshot attempt fails. */
+function failingRestore(target: Page): Page {
+  let shotAttempted = false;
+  return new Proxy(target, {
+    get(_page, prop) {
+      if (prop === 'screenshot') {
+        return async (...args: Parameters<Page['screenshot']>) => {
+          try { return await target.screenshot(...args); } finally { shotAttempted = true; }
+        };
+      }
+      if (prop === 'setViewportSize') {
+        return async (size: { width: number; height: number }) => {
+          if (shotAttempted) throw new Error('restore boom\n  at the page');
+          return target.setViewportSize(size);
+        };
+      }
+      const value = Reflect.get(target, prop);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  });
 }
 
 function pngSize(file: string): { width: number; height: number } {
@@ -111,7 +133,7 @@ describe('capture script in headless Chromium, run as browser_run_code_unsafe ru
     ['two side-by-side scrollers, grown by the larger overflow only', 'capture-two-columns.html', '390x844', 1344],
     ['a list taller than the height cap', 'capture-tall-list.html', '390x844', 4000],
     ['a fixed-height inner scroller, which stops growing after one re-check', 'capture-fixed-scroller.html', '390x844', 1544],
-    ['a scroller sharing its growth with a flex panel, grown once more by what remained', 'capture-shared-flex.html', '390x844', 1711],
+    ['a scroller sharing its growth with a capped flex panel, grown three times until it fits', 'capture-shared-flex.html', '390x844', 1750],
   ])('captures %s at its known height and leaves the viewport at the target size', async (_label, fixture, viewport, shotHeight) => {
     const { width, height } = parseViewport(viewport) as Viewport;
     await open(fixture);
@@ -184,6 +206,39 @@ describe('capture script in headless Chromium, run as browser_run_code_unsafe ru
 
     await expect(runCaptureFile(files.capture)).rejects.toThrow(/EISDIR/);
     expect(page.viewportSize()).toEqual({ width: 390, height: 844 });
+  });
+
+  it('notes a failed restore after a failed layout step, and still answers saved', async () => {
+    await open('capture-fits.html');
+    await page.evaluate(() => { document.createRange = () => { throw new Error('layout boom'); }; });
+    const files = targetFiles('390x844', makeTempDir('capture'));
+
+    const result = await runCaptureFile(files.capture, failingRestore(page));
+
+    expect(result).toBe(JSON.stringify(`saved ${files.frame} at 390x844; layout not measured: page.evaluate: Error: layout boom; viewport not restored: restore boom`));
+    expect(pngSize(files.frame)).toEqual({ width: 390, height: 844 });
+  });
+
+  it('throws the screenshot error, not the restore error, when both fail', async () => {
+    const files = targetFiles('390x844', makeTempDir('capture'));
+    fs.mkdirSync(files.frame);
+    await open('capture-rn-web.html');
+
+    const running = runCaptureFile(files.capture, failingRestore(page));
+
+    await expect(running).rejects.toThrow(/EISDIR/);
+    await expect(running).rejects.not.toThrow(/restore boom/);
+  });
+
+  it('captures a quirks-mode page whose body scrolls, where document.scrollingElement is null', async () => {
+    await open('capture-quirks.html');
+    expect(await page.evaluate(() => [document.compatMode, document.scrollingElement])).toEqual(['BackCompat', null]);
+
+    const shot = await capture('390x844');
+
+    expect(shot.result).toBe(JSON.stringify(`saved ${shot.frameFile} at 390x1200`));
+    expect(pngSize(shot.frameFile)).toEqual({ width: 390, height: 1200 });
+    expect(shot.viewportAfter).toEqual({ width: 390, height: 844 });
   });
 
   it('captures to the right file when the worktree path holds quotes, a backslash and ${', async () => {

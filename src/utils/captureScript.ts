@@ -17,7 +17,7 @@ export const SCROLL_OVERFLOW_SNIPPET = `() => {
     };
     const scrolls = (el) => el.tagName !== 'TEXTAREA' && /^(auto|scroll)$/.test(getComputedStyle(el).overflowY) && shown(el);
     const modal = [...document.querySelectorAll('[aria-modal="true"]')].find(shown);
-    let overflow = modal ? 0 : document.scrollingElement.scrollHeight - innerHeight;
+    let overflow = modal ? 0 : (document.scrollingElement || document.documentElement).scrollHeight - innerHeight;
     for (const el of modal ? [modal, ...modal.querySelectorAll('*')] : document.querySelectorAll('*')) {
       const extra = el.scrollHeight - el.clientHeight;
       if (extra > overflow && scrolls(el)) overflow = extra;
@@ -45,16 +45,16 @@ export function buildCaptureScript(config: { viewport: Viewport; frameFile: stri
     ...config,
     settleMs: LIVE_PASS.CAPTURE_SETTLE_MS,
     maxHeight: Math.max(LIVE_PASS.CAPTURE_MAX_HEIGHT, config.viewport.height),
+    maxGrows: LIVE_PASS.CAPTURE_MAX_GROWS,
   });
   return `async (page) => {
-  const { viewport, frameFile, key, settleMs, maxHeight } = ${capture};
+  const { viewport, frameFile, key, settleMs, maxHeight, maxGrows } = ${capture};
   const settle = () => new Promise((resolve) => setTimeout(resolve, settleMs));
+  const firstLine = (error) => String((error && error.message) || error).split('\\n')[0];
   const overflow = () => page.evaluate(${SCROLL_OVERFLOW_SNIPPET});
-  let height = viewport.height;
-  await page.setViewportSize(viewport);
-  await settle();
-  try {
-    for (let grown = 0, last = Infinity; grown < 2 && height < maxHeight; grown++) {
+  const shoot = async () => {
+    let height = viewport.height;
+    for (let grown = 0, last = Infinity; grown < maxGrows && height < maxHeight; grown++) {
       const by = await overflow();
       if (by <= 1 || by >= last) break;
       height = Math.min(height + Math.ceil(by), maxHeight);
@@ -72,11 +72,20 @@ export function buildCaptureScript(config: { viewport: Viewport; frameFile: stri
       }, key);
       return saved;
     } catch (error) {
-      return saved + '; layout not measured: ' + String((error && error.message) || error).split('\\n')[0];
+      return saved + '; layout not measured: ' + firstLine(error);
     }
-  } finally {
-    await page.setViewportSize(viewport);
+  };
+  const restore = () => page.setViewportSize(viewport).then(() => '', (error) => '; viewport not restored: ' + firstLine(error));
+  await page.setViewportSize(viewport);
+  await settle();
+  let result;
+  try {
+    result = await shoot();
+  } catch (error) {
+    await restore();
+    throw error;
   }
+  return result + (await restore());
 }
 `;
 }

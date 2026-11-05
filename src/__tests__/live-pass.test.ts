@@ -299,7 +299,8 @@ describe('buildLivePassPrompt', () => {
     expect(prompt).toContain('Capture it: browser_run_code_unsafe with filename set to the exact absolute path printed as "capture:" for that target below. Never pass code, never write, edit or read a capture file');
     expect(prompt).toContain('/work/tree/.live-pass/run1');
     expect(prompt).toContain('If a capture returns an error, add the target to "skipped" with the error text. Never fall back to browser_take_screenshot.');
-    expect(prompt).toContain('The capture sets the target\'s viewport, grows it taller until the screen\'s scroll area fits, up to 4000 px, saves the screenshot to that target\'s "file:" path');
+    expect(prompt).toContain('The capture sets the target\'s viewport and grows a scrolling screen taller, a few times at most and up to 4000 px, until its scroll area fits; a screen that still scrolls after that is shot as it stands.');
+    expect(prompt).toContain('an added "; layout not measured: <error>" or "; viewport not restored: <error>" still saved the frame.');
     expect(prompt).not.toContain('full height');
     expect(prompt).not.toContain('browser_resize');
     expect(prompt).not.toContain('fullPage');

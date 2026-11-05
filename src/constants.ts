@@ -94,6 +94,7 @@ export const LIVE_PASS = {
   CAPTURE_SETTLE_MS: 1000,
   // A virtualized list's tail spacer can report a scrollHeight far past its rows.
   CAPTURE_MAX_HEIGHT: 4000,
+  CAPTURE_MAX_GROWS: 4,
   LAYOUT_CHECK_ID: "layout-check/1",
   LAYOUT_MAX_ENTRIES: 50,
   LAYOUT_TEXT_CHARS: 80,
