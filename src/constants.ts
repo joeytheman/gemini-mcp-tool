@@ -41,6 +41,7 @@ export const AGY_LIMITS = {
   CEILING_MARGIN_MS: 2 * 60_000,
   DEFAULT_CEILING_MS: 2 * 60 * 60_000,
   KILL_GRACE_MS: 10_000,
+  KILL_CLOSE_WAIT_MS: 1_000,
 } as const;
 
 // Undocumented Antigravity CLI internals. The step store feeds only the

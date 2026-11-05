@@ -29,6 +29,8 @@ function createMockChildProcess() {
   const proc = new EventEmitter() as any;
   proc.stdout = new EventEmitter();
   proc.stderr = new EventEmitter();
+  proc.stdout.destroy = vi.fn();
+  proc.stderr.destroy = vi.fn();
   proc.kill = vi.fn();
   return proc;
 }
@@ -233,43 +235,48 @@ describe('executeCommand limits', () => {
     vi.useRealTimers();
   });
 
-  it('sends SIGTERM and rejects AGY_HUNG when the run outlives its limit', async () => {
+  it.skipIf(process.platform === 'win32')('waits for close after SIGTERM before reporting a timed-out call', async () => {
     const mockProc = createMockChildProcess();
     mockSpawn.mockReturnValue(mockProc);
 
     const promise = executeCommand('agy', [], undefined, undefined, { killAfterMs: 5000 });
-    const rejection = expect(promise).rejects.toThrow(`${ERROR_MESSAGES.AGY_HUNG}: limit 5s`);
+    let settled = false;
+    void promise.then(() => { settled = true; }, () => { settled = true; });
     vi.advanceTimersByTime(5000);
 
-    await rejection;
+    await Promise.resolve();
+    expect(settled).toBe(false);
     expect(mockProc.kill).toHaveBeenCalledWith('SIGTERM');
     expect(mockProc.kill).not.toHaveBeenCalledWith('SIGKILL');
+    mockProc.emit('close', null);
+    await expect(promise).rejects.toThrow(`${ERROR_MESSAGES.AGY_HUNG}: limit 5s`);
+    expect(vi.getTimerCount()).toBe(0);
   });
 
-  it('sends SIGKILL after the grace period when the process ignores SIGTERM', async () => {
+  it.skipIf(process.platform === 'win32')('sends SIGKILL after the grace period when the process ignores SIGTERM', async () => {
     const mockProc = createMockChildProcess();
     mockSpawn.mockReturnValue(mockProc);
 
     const promise = executeCommand('agy', [], undefined, undefined, { killAfterMs: 5000 });
-    const rejection = expect(promise).rejects.toThrow(ERROR_MESSAGES.AGY_HUNG);
     vi.advanceTimersByTime(5000 + AGY_LIMITS.KILL_GRACE_MS);
 
-    await rejection;
     expect(mockProc.kill.mock.calls).toEqual([['SIGTERM'], ['SIGKILL']]);
+    mockProc.emit('close', null);
+    await expect(promise).rejects.toThrow(ERROR_MESSAGES.AGY_HUNG);
   });
 
-  it('does not SIGKILL a process that exited after SIGTERM', async () => {
+  it.skipIf(process.platform === 'win32')('escalates when agy exited but a descendant still holds its output pipe', async () => {
     const mockProc = createMockChildProcess();
     mockSpawn.mockReturnValue(mockProc);
 
     const promise = executeCommand('agy', [], undefined, undefined, { killAfterMs: 5000 });
-    const rejection = expect(promise).rejects.toThrow(ERROR_MESSAGES.AGY_HUNG);
     vi.advanceTimersByTime(5000);
     mockProc.emit('exit', null, 'SIGTERM');
     vi.advanceTimersByTime(AGY_LIMITS.KILL_GRACE_MS);
 
-    await rejection;
-    expect(mockProc.kill.mock.calls).toEqual([['SIGTERM']]);
+    expect(mockProc.kill.mock.calls).toEqual([['SIGTERM'], ['SIGKILL']]);
+    mockProc.emit('close', null);
+    await expect(promise).rejects.toThrow(ERROR_MESSAGES.AGY_HUNG);
   });
 
   it('records completion when a stopped run finally closes, so its args are not retained', async () => {
@@ -277,14 +284,70 @@ describe('executeCommand limits', () => {
     mockSpawn.mockReturnValue(mockProc);
 
     const promise = executeCommand('agy', [], undefined, undefined, { killAfterMs: 5000 });
-    const rejection = expect(promise).rejects.toThrow(ERROR_MESSAGES.AGY_HUNG);
     vi.advanceTimersByTime(5000);
-    await rejection;
     expect(Logger.commandComplete).not.toHaveBeenCalled();
 
     mockProc.emit('close', null);
 
+    await expect(promise).rejects.toThrow(ERROR_MESSAGES.AGY_HUNG);
     expect(Logger.commandComplete).toHaveBeenCalledWith(expect.any(Number), null);
+  });
+
+  it('bounds the close wait and clears the logger after SIGKILL', async () => {
+    const mockProc = createMockChildProcess();
+    mockSpawn.mockReturnValue(mockProc);
+
+    const promise = executeCommand('agy', [], undefined, undefined, { killAfterMs: 5000 });
+    vi.advanceTimersByTime(5000 + AGY_LIMITS.KILL_GRACE_MS + AGY_LIMITS.KILL_CLOSE_WAIT_MS);
+
+    await expect(promise).rejects.toThrow(ERROR_MESSAGES.AGY_HUNG);
+    expect(mockProc.stdout.destroy).toHaveBeenCalled();
+    expect(mockProc.stderr.destroy).toHaveBeenCalled();
+    expect(Logger.commandComplete).toHaveBeenCalledTimes(1);
+    mockProc.emit('close', null);
+    expect(Logger.commandComplete).toHaveBeenCalledTimes(1);
+  });
+
+  it.skipIf(process.platform === 'win32')('signals the isolated POSIX process group, including descendants', async () => {
+    const mockProc = createMockChildProcess();
+    mockProc.pid = 12345;
+    mockSpawn.mockReturnValue(mockProc);
+    const killSpy = vi.spyOn(process, 'kill').mockReturnValue(true);
+
+    try {
+      const promise = executeCommand('agy', [], undefined, undefined, { killAfterMs: 5000 });
+      expect(mockSpawn.mock.calls[0][2].detached).toBe(true);
+      vi.advanceTimersByTime(5000);
+      expect(killSpy).toHaveBeenCalledWith(-12345, 'SIGTERM');
+      mockProc.emit('close', null);
+      await expect(promise).rejects.toThrow(ERROR_MESSAGES.AGY_HUNG);
+      expect(killSpy).toHaveBeenCalledWith(-12345, 'SIGKILL');
+    } finally {
+      killSpy.mockRestore();
+    }
+  });
+
+  it('uses taskkill for the Windows process tree before the parent can exit', async () => {
+    const originalPlatform = process.platform;
+    Object.defineProperty(process, 'platform', { value: 'win32' });
+    const mockProc = createMockChildProcess();
+    mockProc.pid = 12345;
+    const killer = new EventEmitter();
+    mockSpawn.mockReturnValueOnce(mockProc).mockReturnValueOnce(killer);
+
+    try {
+      const promise = executeCommand('agy', [], undefined, undefined, { killAfterMs: 5000 });
+      vi.advanceTimersByTime(5000);
+      expect(mockSpawn).toHaveBeenCalledWith('taskkill', ['/PID', '12345', '/T', '/F'], {
+        shell: false,
+        stdio: 'ignore',
+        windowsHide: true,
+      });
+      mockProc.emit('close', null);
+      await expect(promise).rejects.toThrow(ERROR_MESSAGES.AGY_HUNG);
+    } finally {
+      Object.defineProperty(process, 'platform', { value: originalPlatform });
+    }
   });
 
   it('never stops a run that finished before its limit, and leaves no timer behind', async () => {
@@ -301,18 +364,23 @@ describe('executeCommand limits', () => {
     expect(mockProc.kill).not.toHaveBeenCalled();
   });
 
-  it('caps a limit beyond the timer maximum instead of firing it after 1 ms', async () => {
+  it('rearms a timer beyond Node\'s maximum without shortening the requested limit', async () => {
     const mockProc = createMockChildProcess();
     mockSpawn.mockReturnValue(mockProc);
     const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout');
 
     const promise = executeCommand('agy', [], undefined, undefined, { killAfterMs: 600 * 60 * 60_000 });
-    vi.advanceTimersByTime(60_000);
+    const limitMs = 600 * 60 * 60_000;
+    vi.advanceTimersByTime(2 ** 31 - 1);
 
     expect(setTimeoutSpy).toHaveBeenCalledWith(expect.any(Function), 2 ** 31 - 1);
     expect(mockProc.kill).not.toHaveBeenCalled();
-    mockProc.emit('close', 0);
-    await expect(promise).resolves.toBe('');
+    vi.advanceTimersByTime(limitMs - (2 ** 31 - 1) - 1);
+    expect(mockProc.kill).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1);
+    expect(mockProc.kill).toHaveBeenCalledWith(process.platform === 'win32' ? 'SIGKILL' : 'SIGTERM');
+    mockProc.emit('close', null);
+    await expect(promise).rejects.toThrow(ERROR_MESSAGES.AGY_HUNG);
     setTimeoutSpy.mockRestore();
   });
 
@@ -324,8 +392,23 @@ describe('executeCommand limits', () => {
     const promise = executeCommand('agy', [], undefined, undefined, { signal: controller.signal });
     controller.abort();
 
+    expect(mockProc.kill).toHaveBeenCalledWith(process.platform === 'win32' ? 'SIGKILL' : 'SIGTERM');
+    mockProc.emit('close', null);
     await expect(promise).rejects.toThrow(ERROR_MESSAGES.AGY_CANCELLED);
-    expect(mockProc.kill).toHaveBeenCalledWith('SIGTERM');
+  });
+
+  it('notices a cancellation that happens during spawn', async () => {
+    const controller = new AbortController();
+    const mockProc = createMockChildProcess();
+    mockSpawn.mockImplementation(() => {
+      controller.abort();
+      return mockProc;
+    });
+
+    const promise = executeCommand('agy', [], undefined, undefined, { signal: controller.signal });
+    expect(mockProc.kill).toHaveBeenCalledWith(process.platform === 'win32' ? 'SIGKILL' : 'SIGTERM');
+    mockProc.emit('close', null);
+    await expect(promise).rejects.toThrow(ERROR_MESSAGES.AGY_CANCELLED);
   });
 
   it('never spawns when the request was already cancelled', async () => {

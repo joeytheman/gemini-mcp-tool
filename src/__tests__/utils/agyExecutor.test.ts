@@ -851,6 +851,7 @@ describe('agyKillAfterMs', () => {
     ['a compound duration', '1m30s'],
     ['a zero timeout, which agy reads as no limit', '0s'],
     ['a bare number', '600'],
+    ['an overflowing duration', `${'9'.repeat(400)}h`],
   ])('falls back to the default ceiling for %s', (_label, printTimeout) => {
     expect(agyKillAfterMs(printTimeout)).toBe(AGY_LIMITS.DEFAULT_CEILING_MS);
   });

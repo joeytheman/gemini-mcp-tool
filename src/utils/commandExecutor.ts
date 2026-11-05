@@ -2,11 +2,11 @@ import { spawn } from "child_process";
 import { Logger } from "./logger.js";
 import { AGY_LIMITS, ERROR_MESSAGES } from "../constants.js";
 
-// setTimeout fires after 1 ms for any longer delay.
+// Node clamps longer delays to 1 ms, so long limits need more than one timer.
 const MAX_TIMER_DELAY_MS = 2 ** 31 - 1;
 
 export interface CommandLimits {
-  /** Stop the process this long after spawn (SIGTERM, then SIGKILL after a grace period). */
+  /** Stop the process this long after spawn (SIGTERM then SIGKILL on POSIX; taskkill on Windows). */
   killAfterMs?: number;
   /** Stop the process when the caller's request is cancelled. */
   signal?: AbortSignal;
@@ -28,33 +28,103 @@ export async function executeCommand(
     const startTime = Date.now();
     Logger.commandExecution(command, args, startTime);
 
+    // Give limited POSIX commands their own process group. agy's MCP children
+    // inherit it, so a stop can reach them even if agy ignores SIGTERM.
+    const grouped = process.platform !== "win32" &&
+      (limits.killAfterMs !== undefined || limits.signal !== undefined);
     const childProcess = spawn(command, args, {
       env: process.env,
       shell: false,
       stdio: ["ignore", "pipe", "pipe"],
       ...(cwd && { cwd }),
+      ...(grouped && { detached: true }),
     });
 
     // Use array buffers for O(n) performance instead of O(n²) string concatenation
     const stdoutChunks: string[] = [];
     const stderrChunks: string[] = [];
     let isResolved = false;
+    let stopError: Error | undefined;
     let resourceExhausted = false;
     let ceilingTimer: NodeJS.Timeout | undefined;
     let graceTimer: NodeJS.Timeout | undefined;
+    let closeTimer: NodeJS.Timeout | undefined;
 
     const settle = () => {
       isResolved = true;
       clearTimeout(ceilingTimer);
+      clearTimeout(graceTimer);
+      clearTimeout(closeTimer);
       limits.signal?.removeEventListener("abort", onAbort);
     };
-    const stop = (error: Error) => {
+
+    const signalProcessGroup = (signal: NodeJS.Signals) => {
+      try {
+        if (grouped && childProcess.pid !== undefined) {
+          process.kill(-childProcess.pid, signal);
+        } else {
+          childProcess.kill(signal);
+        }
+      } catch {
+        // A process can exit between the timer and the signal. If the group
+        // signal failed for another reason, still try to stop agy itself.
+        if (grouped) childProcess.kill(signal);
+      }
+    };
+
+    const signalWindowsTree = () => {
+      if (childProcess.pid === undefined) {
+        childProcess.kill("SIGKILL");
+        return;
+      }
+      // Windows has no negative-PID group signal. Kill the tree while the
+      // parent PID still exists, before its children can become orphaned.
+      const killer = spawn("taskkill", ["/PID", String(childProcess.pid), "/T", "/F"], {
+        shell: false,
+        stdio: "ignore",
+        windowsHide: true,
+      });
+      killer.on("error", (error) => {
+        Logger.error("Could not stop the Windows process tree:", error);
+        childProcess.kill("SIGKILL");
+      });
+      killer.on("close", (code) => {
+        if (code !== 0 && !isResolved) {
+          Logger.error(`taskkill could not stop the Windows process tree (exit ${code})`);
+          childProcess.kill("SIGKILL");
+        }
+      });
+    };
+
+    const finishStopped = (code: number | null) => {
       if (isResolved) return;
       settle();
+      Logger.commandComplete(startTime, code);
+      reject(stopError);
+    };
+
+    const forceStop = () => {
+      if (isResolved) return;
+      if (process.platform === "win32") signalWindowsTree();
+      else signalProcessGroup("SIGKILL");
+      // A detached descendant can keep inherited pipes open after agy dies.
+      // Bound that wait and drop the logger's copy of the prompt either way.
+      closeTimer = setTimeout(() => {
+        childProcess.stdout.destroy?.();
+        childProcess.stderr.destroy?.();
+        finishStopped(childProcess.exitCode ?? null);
+      }, AGY_LIMITS.KILL_CLOSE_WAIT_MS);
+    };
+
+    const stop = (error: Error) => {
+      if (isResolved || stopError) return;
+      stopError = error;
+      clearTimeout(ceilingTimer);
+      limits.signal?.removeEventListener("abort", onAbort);
       Logger.error(error.message);
-      childProcess.kill("SIGTERM");
-      graceTimer = setTimeout(() => childProcess.kill("SIGKILL"), AGY_LIMITS.KILL_GRACE_MS);
-      reject(error);
+      if (process.platform === "win32") signalWindowsTree();
+      else signalProcessGroup("SIGTERM");
+      graceTimer = setTimeout(forceStop, AGY_LIMITS.KILL_GRACE_MS);
     };
     function onAbort() {
       stop(new Error(ERROR_MESSAGES.AGY_CANCELLED));
@@ -62,15 +132,22 @@ export async function executeCommand(
 
     if (limits.killAfterMs !== undefined) {
       const limitMs = limits.killAfterMs;
-      ceilingTimer = setTimeout(
-        () => stop(new Error(`${ERROR_MESSAGES.AGY_HUNG}: limit ${Math.round(limitMs / 1000)}s`)),
-        Math.min(limitMs, MAX_TIMER_DELAY_MS)
-      );
+      const deadline = Date.now() + limitMs;
+      const scheduleCeiling = () => {
+        const remaining = deadline - Date.now();
+        if (remaining <= 0) {
+          stop(new Error(`${ERROR_MESSAGES.AGY_HUNG}: limit ${Math.round(limitMs / 1000)}s`));
+        } else {
+          ceilingTimer = setTimeout(scheduleCeiling, Math.min(remaining, MAX_TIMER_DELAY_MS));
+        }
+      };
+      scheduleCeiling();
     }
     limits.signal?.addEventListener("abort", onAbort, { once: true });
-    childProcess.on("exit", () => clearTimeout(graceTimer));
+    if (limits.signal?.aborted) onAbort();
 
     childProcess.stdout.on("data", (data) => {
+      if (stopError) return;
       const chunk = data.toString();
       stdoutChunks.push(chunk);
 
@@ -83,6 +160,7 @@ export async function executeCommand(
 
     // CLI level errors
     childProcess.stderr.on("data", (data) => {
+      if (stopError) return;
       const chunk = data.toString();
       stderrChunks.push(chunk);
       // Surface resource/quota failures from the backend without attempting
@@ -112,15 +190,20 @@ export async function executeCommand(
     });
     childProcess.on("error", (error) => {
       if (!isResolved) {
+        if (stopError) return;
         settle();
         Logger.error(`Process error:`, error);
+        Logger.commandComplete(startTime, null);
         reject(new Error(`Failed to spawn command: ${error.message}`));
       }
     });
     childProcess.on("close", (code) => {
-      if (isResolved) {
-        // Stopped or failed earlier: record the exit so the logger drops this command's args.
-        Logger.commandComplete(startTime, code);
+      if (isResolved) return;
+      if (stopError) {
+        // A parent can exit before its children. Clear any survivors from its
+        // process group before reporting that the request has stopped.
+        if (grouped && childProcess.pid !== undefined) signalProcessGroup("SIGKILL");
+        finishStopped(code);
         return;
       }
       settle();

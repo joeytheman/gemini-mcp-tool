@@ -76,7 +76,9 @@ const DURATION_UNIT_MS = { s: 1000, m: 60_000, h: 3_600_000 } as const;
 export function agyKillAfterMs(printTimeout?: string): number {
   const match = printTimeout?.trim().match(WHOLE_DURATION);
   const timeoutMs = match ? Number(match[1]) * DURATION_UNIT_MS[match[2] as keyof typeof DURATION_UNIT_MS] : 0;
-  return timeoutMs > 0 ? timeoutMs + AGY_LIMITS.CEILING_MARGIN_MS : AGY_LIMITS.DEFAULT_CEILING_MS;
+  return timeoutMs > 0 && timeoutMs <= Number.MAX_SAFE_INTEGER - AGY_LIMITS.CEILING_MARGIN_MS
+    ? timeoutMs + AGY_LIMITS.CEILING_MARGIN_MS
+    : AGY_LIMITS.DEFAULT_CEILING_MS;
 }
 
 const AGY_STATUS_SUCCESS = 'SUCCESS';
