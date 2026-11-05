@@ -279,12 +279,21 @@ describe('executeAgyCLI', () => {
       expect(mockCacheResponse).not.toHaveBeenCalled();
     });
 
-    it('returns an empty answer without caching it', async () => {
+    it.each([
+      ['an empty answer', textEnvelope('')],
+      ['a whitespace-only answer', textEnvelope(' \n ')],
+    ])('throws AGY_NO_OUTPUT for %s and caches nothing', async (_label, stdout) => {
       mockIsCacheEnabled.mockReturnValue(true);
+      mockExecuteCommand.mockResolvedValue(stdout);
+
+      await expect(executeAgyCLI('test', {})).rejects.toThrow(ERROR_MESSAGES.AGY_NO_OUTPUT);
+      expect(mockCacheResponse).not.toHaveBeenCalled();
+    });
+
+    it('throws AGY_NO_OUTPUT for an empty changeMode answer instead of reporting no edits', async () => {
       mockExecuteCommand.mockResolvedValue(textEnvelope(''));
 
-      expect(await executeAgyCLI('test', {})).toBe('');
-      expect(mockCacheResponse).not.toHaveBeenCalled();
+      await expect(executeAgyCLI('test', { changeMode: true })).rejects.toThrow(ERROR_MESSAGES.AGY_NO_OUTPUT);
     });
 
     it('throws AGY_STATUS_ERROR with the envelope error text', async () => {
@@ -313,13 +322,24 @@ describe('executeAgyCLI', () => {
         .rejects.toThrow(`${ERROR_MESSAGES.AGY_DENIED_ACTIONS}: RunCommand (command)`);
     });
 
-    it('throws CHANGEMODE_DENIED_ACTIONS, not the yolo advice, when changeMode tried to write the file', async () => {
+    it('throws CHANGEMODE_DENIED_ACTIONS, not the yolo advice, when changeMode had an action denied', async () => {
       mockExecuteCommand.mockResolvedValue(textEnvelope('', {
         denied_actions: [{ action: 'write_file', display_name: 'EditFile' }],
       }));
 
       await expect(executeAgyCLI('test', { changeMode: true }))
         .rejects.toThrow(`${ERROR_MESSAGES.CHANGEMODE_DENIED_ACTIONS}: EditFile (write_file)`);
+    });
+
+    it('names a denied shell command in changeMode without claiming Gemini acted on the files', async () => {
+      mockExecuteCommand.mockResolvedValue(textEnvelope('', {
+        denied_actions: [{ action: 'command', display_name: 'RunCommand' }],
+      }));
+
+      await expect(executeAgyCLI('test', { changeMode: true })).rejects.toThrow(new Error(
+        'changeMode returned no OLD/NEW edits. Ask again for the change as OLD/NEW edits, without yolo. ' +
+        'Denied: RunCommand (command)'
+      ));
     });
 
     it('returns changeMode OLD/NEW text from the response for parsing', async () => {
@@ -623,6 +643,24 @@ describe('executeAgyCLI json mode', () => {
     expect(mockCacheResponse).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ['no structured_output', { structured_output: null }],
+    ['only a structured_output replayed from an earlier turn', { structured_output: { ok: true } }],
+  ])('throws AGY_NO_OUTPUT for a SUCCESS envelope with an empty response and %s', async (_label, overrides) => {
+    mockIsCacheEnabled.mockReturnValue(true);
+    mockExecuteCommand.mockResolvedValue(envelopeLine({ response: '', ...overrides }));
+
+    await expect(executeAgyCLI('test', { outputFormat: 'json' })).rejects.toThrow(ERROR_MESSAGES.AGY_NO_OUTPUT);
+    expect(mockCacheResponse).not.toHaveBeenCalled();
+  });
+
+  it('resolves when the response is empty but this call\'s schema answer came back', async () => {
+    const raw = envelopeLine({ response: '' });
+    mockExecuteCommand.mockResolvedValue(raw);
+
+    expect(await executeAgyCLI('test', { outputFormat: 'json', jsonSchema: '{"type":"object"}' })).toBe(raw);
+  });
+
   it('resolves when actions were denied but this call\'s schema answer came back', async () => {
     const raw = envelopeLine({ response: '', denied_actions: [{ action: 'command', display_name: 'RunCommand' }] });
     mockExecuteCommand.mockResolvedValue(raw);
@@ -840,6 +878,11 @@ describe('agyKillAfterMs', () => {
     ['90s', 90_000],
     ['15m', 15 * 60_000],
     ['1h', 60 * 60_000],
+    ['2h30m', 150 * 60_000],
+    ['1h30m', 90 * 60_000],
+    ['2.5h', 150 * 60_000],
+    ['1m30.5s', 90_500],
+    ['500ms', 500],
   ])('limits a %s print timeout to it plus the margin', (printTimeout, timeoutMs) => {
     expect(agyKillAfterMs(printTimeout)).toBe(timeoutMs + AGY_LIMITS.CEILING_MARGIN_MS);
   });
@@ -847,9 +890,12 @@ describe('agyKillAfterMs', () => {
   it.each([
     ['no print timeout', undefined],
     ['an empty value', ''],
-    ['garbage', 'soon'],
-    ['a compound duration', '1m30s'],
-    ['a zero timeout, which agy reads as no limit', '0s'],
+    ['garbage', 'abc'],
+    ['a unit with no amount', 'h'],
+    ['a duration followed by garbage', '1habc'],
+    ['a zero timeout, which agy reads as no limit', '0'],
+    ['a zero duration', '0s'],
+    ['a compound zero duration', '0h0m'],
     ['a bare number', '600'],
     ['an overflowing duration', `${'9'.repeat(400)}h`],
   ])('falls back to the default ceiling for %s', (_label, printTimeout) => {

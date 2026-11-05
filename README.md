@@ -221,9 +221,9 @@ These tools are designed to be used by the AI assistant.
   - **`changeMode`** (optional): Enable structured change mode for edit suggestions that Claude can apply directly.
   - **`yolo`** (optional): Pass `--dangerously-skip-permissions`. Use with caution.
   - **`includeDirectories`** (optional): Additional directories to include in the Antigravity workspace; maps to repeated `--add-dir`.
-  - **`printTimeout`** (optional): Pass `--print-timeout` (for example, `5m` or `90s`).
+  - **`printTimeout`** (optional): Pass `--print-timeout` (for example, `5m` or `90s`). The server stops agy 2 minutes after this limit, or after 2 hours when no limit is given.
   - **`resume`** (optional): `true`, `latest`, or `continue` maps to `--continue`; any other string maps to `--conversation <id>`.
-  - **`conversationId`** (optional): Resume this exact conversation (`--conversation <id>`); wins over `resume`. In `outputFormat: "json"` the call fails with `CONVERSATION_NOT_RESUMED` when agy silently starts a different conversation — a stale ID only warns on stderr and would otherwise return an unrelated answer. IDs come from the `[GEMINI_CONVERSATION_ID=...]` line of a previous json call; text mode has no ID to report.
+  - **`conversationId`** (optional): Resume this exact conversation (`--conversation <id>`); wins over `resume`. The call fails with `CONVERSATION_NOT_RESUMED` when agy silently starts a different conversation — a stale ID only warns on stderr and would otherwise return an unrelated answer. IDs come from the `[GEMINI_CONVERSATION_ID=...]` line of a previous json call; text mode has no ID to report.
   - **`outputFormat`** (optional): `"text"` (default) or `"json"`. `"json"` returns agy's envelope rendered as the conversation line, the answer, and a usage line. `"stream-json"` is unsupported.
   - **`jsonSchema`** (optional): Inline JSON Schema passed to `--json-schema`, constraining the answer to `structured_output`. Requires `outputFormat: "json"`.
   - **`effort`** (optional): `low`, `medium`, or `high`, passed to `--effort`. Tiered Gemini names already encode effort in the name, and agy rejects `--effort` for them — the rejection is surfaced verbatim.

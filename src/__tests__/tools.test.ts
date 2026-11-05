@@ -168,6 +168,23 @@ describe('Tool Registry', () => {
       expect(properties).toHaveProperty('printTimeout');
     });
 
+    it('ask-gemini describes the resume check for every output format', () => {
+      const askGeminiTool = getToolDefinitions().find(t => t.name === 'ask-gemini');
+      const conversationId = askGeminiTool?.inputSchema.properties?.conversationId as { description?: string };
+
+      expect(conversationId.description).toContain('The call errors when agy silently starts a different conversation');
+      expect(conversationId.description).not.toContain("outputFormat 'json'");
+    });
+
+    it.each(['ask-gemini', 'live-pass', 'screen-review'])('%s documents when the server stops agy past printTimeout', (toolName) => {
+      const tool = getToolDefinitions().find(t => t.name === toolName);
+      const printTimeout = tool?.inputSchema.properties?.printTimeout as { description?: string };
+
+      expect(printTimeout.description).toContain(
+        'The server stops agy 2 minutes after this limit, or after 2 hours when no limit is given.'
+      );
+    });
+
     it('brainstorm should have methodology parameter', () => {
       const tools = getToolDefinitions();
       const brainstormTool = tools.find(t => t.name === 'brainstorm');
