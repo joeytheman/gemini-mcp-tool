@@ -2,6 +2,9 @@ import { spawn } from "child_process";
 import { Logger } from "./logger.js";
 import { AGY_LIMITS, ERROR_MESSAGES } from "../constants.js";
 
+// setTimeout fires after 1 ms for any longer delay.
+const MAX_TIMER_DELAY_MS = 2 ** 31 - 1;
+
 export interface CommandLimits {
   /** Stop the process this long after spawn (SIGTERM, then SIGKILL after a grace period). */
   killAfterMs?: number;
@@ -61,7 +64,7 @@ export async function executeCommand(
       const limitMs = limits.killAfterMs;
       ceilingTimer = setTimeout(
         () => stop(new Error(`${ERROR_MESSAGES.AGY_HUNG}: limit ${Math.round(limitMs / 1000)}s`)),
-        limitMs
+        Math.min(limitMs, MAX_TIMER_DELAY_MS)
       );
     }
     limits.signal?.addEventListener("abort", onAbort, { once: true });

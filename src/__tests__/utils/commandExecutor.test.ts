@@ -285,6 +285,21 @@ describe('executeCommand limits', () => {
     expect(mockProc.kill).not.toHaveBeenCalled();
   });
 
+  it('caps a limit beyond the timer maximum instead of firing it after 1 ms', async () => {
+    const mockProc = createMockChildProcess();
+    mockSpawn.mockReturnValue(mockProc);
+    const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout');
+
+    const promise = executeCommand('agy', [], undefined, undefined, { killAfterMs: 600 * 60 * 60_000 });
+    vi.advanceTimersByTime(60_000);
+
+    expect(setTimeoutSpy).toHaveBeenCalledWith(expect.any(Function), 2 ** 31 - 1);
+    expect(mockProc.kill).not.toHaveBeenCalled();
+    mockProc.emit('close', 0);
+    await expect(promise).resolves.toBe('');
+    setTimeoutSpy.mockRestore();
+  });
+
   it('sends SIGTERM and rejects AGY_CANCELLED when the request is cancelled', async () => {
     const mockProc = createMockChildProcess();
     mockSpawn.mockReturnValue(mockProc);

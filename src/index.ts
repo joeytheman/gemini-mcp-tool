@@ -111,7 +111,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest,
         extra.signal
       );
 
-      progress.finish('success');
+      // A request cancelled after the tool finished still has a retired token.
+      progress.finish(extra.signal.aborted ? 'cancelled' : 'success');
 
       return {
         content: [
