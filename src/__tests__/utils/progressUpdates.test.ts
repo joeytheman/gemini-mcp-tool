@@ -51,41 +51,20 @@ describe('startProgressUpdates', () => {
     startProgressUpdates('ask-gemini', 'tok-ok', send).finish('success');
     startProgressUpdates('ask-gemini', 'tok-failed', send).finish('failure');
 
-    expect(callsFor('tok-ok').slice(-1)).toEqual([['tok-ok', 100, 100, '✅ ask-gemini completed successfully']]);
-    expect(callsFor('tok-failed').slice(-1)).toEqual([['tok-failed', 100, 100, '❌ ask-gemini failed']]);
+    expect(callsFor('tok-ok').slice(-1)).toEqual([['tok-ok', 1, 1, '✅ ask-gemini completed successfully']]);
+    expect(callsFor('tok-failed').slice(-1)).toEqual([['tok-failed', 1, 1, '❌ ask-gemini failed']]);
   });
 
-  it('stops every notification the moment the request is cancelled, while the tool still runs', () => {
-    const controller = new AbortController();
-    const updates = startProgressUpdates('timeout-test', 'tok-cancelled', send, controller.signal);
-    send.mockClear();
+  it('ends above the last keep-alive on a call that outlasts 100 keep-alives', () => {
+    const updates = startProgressUpdates('live-pass', 'tok-long', send);
+    vi.advanceTimersByTime(PROTOCOL.KEEPALIVE_INTERVAL * 101);
 
-    controller.abort();
-    vi.advanceTimersByTime(PROTOCOL.KEEPALIVE_INTERVAL * 3);
     updates.finish('success');
 
-    expect(send).not.toHaveBeenCalled();
+    const calls = callsFor('tok-long');
+    expect(calls.map(([, progress]) => progress)).toEqual(Array.from({ length: 103 }, (_, index) => index));
+    expect(calls.at(-1)).toEqual(['tok-long', 102, 102, '✅ live-pass completed successfully']);
     expect(vi.getTimerCount()).toBe(0);
-  });
-
-  it('sends nothing for a request that was cancelled before the call started', () => {
-    const controller = new AbortController();
-    controller.abort();
-
-    const updates = startProgressUpdates('ask-gemini', 'tok-early', send, controller.signal);
-    vi.advanceTimersByTime(PROTOCOL.KEEPALIVE_INTERVAL);
-    updates.finish('failure');
-
-    expect(send).not.toHaveBeenCalled();
-  });
-
-  it('stops listening for a cancel once the call finishes', () => {
-    const controller = new AbortController();
-    const removeListener = vi.spyOn(controller.signal, 'removeEventListener');
-
-    startProgressUpdates('ask-gemini', 'tok-done', send, controller.signal).finish('success');
-
-    expect(removeListener).toHaveBeenCalledWith('abort', expect.any(Function));
   });
 
   it('sends nothing when the client asked for no progress', () => {

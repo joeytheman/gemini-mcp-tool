@@ -32,13 +32,7 @@ export class Logger {
 
   static commandExecution(command: string, args: string[], startTime: number): void {
     this.warn(`[${startTime}] Starting: ${command} ${args.map((arg) => `"${arg}"`).join(" ")}`);
-    
-    // Store command execution start for timing analysis
-    this._commandStartTimes.set(startTime, { command, args, startTime });
   }
-
-  // Track command start times for duration calculation
-  private static _commandStartTimes = new Map<number, { command: string; args: string[]; startTime: number }>();
 
   static commandComplete(startTime: number, exitCode: number | null, outputLength?: number): void {
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
@@ -46,8 +40,5 @@ export class Logger {
     if (outputLength !== undefined) {
       this.warn(`Response: ${outputLength} chars`);
     }
-
-    // Clean up command tracking
-    this._commandStartTimes.delete(startTime);
   }
 }

@@ -107,8 +107,8 @@ export async function executeCommand(
       if (isResolved) return;
       if (process.platform === "win32") signalWindowsTree();
       else signalProcessGroup("SIGKILL");
-      // A detached descendant can keep inherited pipes open after agy dies.
-      // Bound that wait and drop the logger's copy of the prompt either way.
+      // A detached descendant can keep inherited pipes open after agy dies,
+      // so bound the wait for close.
       closeTimer = setTimeout(() => {
         childProcess.stdout.destroy?.();
         childProcess.stderr.destroy?.();

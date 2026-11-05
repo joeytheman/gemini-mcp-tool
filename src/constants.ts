@@ -18,7 +18,9 @@ export const ERROR_MESSAGES = {
   AGY_JSON_PARSE: "Could not parse the Antigravity CLI JSON envelope",
   AGY_STATUS_ERROR: "Antigravity CLI returned status ERROR",
   AGY_DENIED_ACTIONS: "Antigravity CLI produced no response because it denied required actions. Retry with `yolo: true`, or allow the actions in the Antigravity `permissions.allow` settings. Denied",
-  CHANGEMODE_DENIED_ACTIONS: "changeMode returned no OLD/NEW edits: Gemini tried to act on the files itself and agy denied it. Ask again for the change as OLD/NEW edits. Denied",
+  CHANGEMODE_DENIED_ACTIONS: "changeMode returned no OLD/NEW edits. Ask again for the change as OLD/NEW edits, without yolo. Denied",
+  AGY_EMPTY_ANSWER: "Antigravity CLI (`agy`) finished with an empty answer.",
+  INVALID_PRINT_TIMEOUT: "printTimeout must be a duration such as 90s, 15m, 2h30m or 2.5h, or 0 for no limit",
   INVALID_CONVERSATION_ID: "conversationId must be a non-empty agy conversation ID.",
   CONVERSATION_NOT_RESUMED: "agy did not resume conversation",
   AGY_HUNG: "Antigravity CLI (`agy`) ran past its time limit and was stopped",
@@ -44,6 +46,10 @@ export const AGY_LIMITS = {
   KILL_GRACE_MS: 10_000,
   KILL_CLOSE_WAIT_MS: 1_000,
 } as const;
+
+export const PRINT_TIMEOUT_CEILING_NOTE =
+  `The server stops agy ${AGY_LIMITS.CEILING_MARGIN_MS / 60_000} minutes after this limit, ` +
+  `or after ${AGY_LIMITS.DEFAULT_CEILING_MS / 3_600_000} hours when no limit is given.`;
 
 // Undocumented Antigravity CLI internals. The step store feeds only the
 // "Gemini steps" usage line, so a reader must degrade to null, never throw.
