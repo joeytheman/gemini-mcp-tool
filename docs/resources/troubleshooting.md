@@ -154,7 +154,7 @@ claude mcp add gemini-feedback -- npx @joeytheman/gemini-mcp-tool
 
 **Common causes**:
 
-1. **Node.js version compatibility** - Ensure Node.js >= v18.0.0
+1. **Node.js version compatibility** - Ensure Node.js >= v20.12.0
 2. **Antigravity CLI not installed** - Run `agy install` and verify `agy --version`
 3. **Antigravity authentication/setup incomplete** - Run `agy models` and complete any prompts
 4. **PATH issues** - Restart terminal after installing Node.js/npm
