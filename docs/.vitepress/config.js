@@ -6,6 +6,12 @@ export default withMermaid(
     title: 'Gemini MCP Tool Documentation',
     description: 'Bridge Gemini models with Claude Desktop',
     base: '/gemini-mcp-tool/',
+    vite: {
+      optimizeDeps: {
+        // Mermaid's CommonJS FastDom modules need prebundling in Vite 6 dev mode.
+        include: ['fastdom', 'fastdom/extensions/fastdom-promised.js']
+      }
+    },
     
     // Force dark mode by default
     //appearance: 'dark',
