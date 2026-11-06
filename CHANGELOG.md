@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+## [2.3.1]
+- Removed the unused `archiver` development dependency and its transitive packages, updated `tsx`, and pinned patched Vite and KaTeX versions for the docs toolchain. The full `npm audit` now reports zero vulnerabilities.
+- Prebundled Mermaid's FastDom modules for the Vite 6 docs dev server and added a docs build to Node 20 CI.
+- Package and MCP server versions synchronized at `2.3.1`. Runtime features and dependencies are unchanged from 2.3.0.
+
 ## [2.3.0]
 - `live-pass` (web) captures each frame with one `browser_run_code_unsafe` call on a capture file the tool writes beside the frame (`<frame>.capture.js`): it sets the target's viewport and grows a scrolling screen taller, a few times at most and up to 4000 px, until the page's or the largest shown scroller's overflow fits (only scrollers inside an open `aria-modal` sheet count); a screen that still scrolls after that is shot as it stands. It then saves the PNG, runs the layout check at the shot's size, and restores the viewport. One short `browser_evaluate` then saves the layout report to `<frame>.layout.json`. Neither the layout nor the measure snippet is in the prompt any more, and Gemini no longer resizes. A centred or bottom-anchored screen is no longer stretched to about 4000 px. A `playwright` target's `viewport` must now be `WxH`. A reported frame whose filename and file signature do not match PNG or JPEG fails as `NOT_IMAGE`, and the tool replaces an existing file or symlink at a capture path instead of writing through it. Register `@playwright/mcp` with `--codegen none` (README), and use a version that has `browser_run_code_unsafe` (0.0.84 does).
 - Each tool call owns its keep-alive timer and output preview. Before, the first of two overlapping calls to finish stopped the other's keep-alives, and the client aborted the survivor about 30 minutes later.
