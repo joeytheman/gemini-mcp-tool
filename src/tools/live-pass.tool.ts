@@ -16,7 +16,7 @@ import {
 import { bulletList, section, renderUnparsableEnvelope, formatWorkingTreeSection, failWithWorkingTree } from '../utils/agyReport.js';
 import { isWithin, resolveWorkingDirectory, realpathOfExistingPrefix } from '../utils/fileReferences.js';
 import { snapshotWorkingTree, diffWorkingTree, type WorkingTreeDiff } from '../utils/gitStatusGuard.js';
-import { checkArtifactFile, IMAGE_FILE, type ArtifactFileStatus } from '../utils/artifactFile.js';
+import { checkArtifactFile, hasImageSignature, IMAGE_FILE, type ArtifactFileStatus } from '../utils/artifactFile.js';
 import { readCheckout, type Checkout } from '../utils/gitCheckout.js';
 import { formatLayoutEntry, layoutFileName, readLayoutCheck, type LayoutCheck } from '../utils/layoutCheck.js';
 import { buildCaptureScript, parseViewport, saveLayoutFunction } from '../utils/captureScript.js';
@@ -443,9 +443,11 @@ export function validateFrames(
     const expectedName = prescribed.get(targetKey(frame));
     // A second frame pointing at the same file is one screenshot answering two
     // targets — no evidence for either, however good the picture is.
+    const fileStatus = checkArtifactFile(absFile, artifactDir, runStartMs);
     const status: FrameStatus = claimedBy.has(absFile) ? 'DUPLICATE'
       : !IMAGE_FILE.test(absFile) ? 'NOT_IMAGE'
-      : checkArtifactFile(absFile, artifactDir, runStartMs);
+      : fileStatus !== 'OK' ? fileStatus
+      : hasImageSignature(absFile) ? 'OK' : 'NOT_IMAGE';
     claimedBy.add(absFile);
 
     const misnamed = Boolean(expectedName) && path.basename(absFile) !== expectedName;

@@ -58,6 +58,8 @@ import { makeTempDir, cleanupTempDirs } from './utils/test-helpers.js';
 // ------------------------------------------------------------------ helpers
 
 const makeWorkDir = () => makeTempDir('live-pass');
+const PNG = fs.readFileSync(new URL('./fixtures/images/pixel.png', import.meta.url));
+const JPEG = fs.readFileSync(new URL('./fixtures/images/pixel.jpg', import.meta.url));
 
 const HOME_TARGET: LivePassTarget = {
   screen: 'home',
@@ -97,10 +99,10 @@ function makeResult(overrides: Partial<LivePassResult> = {}): LivePassResult {
 const CLEAN_VALIDATION = { checks: [], okFiles: [], problems: [], notes: [], unreportedCaptures: [] };
 const CLEAN_COVERAGE = { uncovered: [], skipped: [], extraFrames: [] };
 
-function writeFrameFile(artifactDir: string, name: string): string {
+function writeFrameFile(artifactDir: string, name: string, contents?: string | Buffer): string {
   fs.mkdirSync(artifactDir, { recursive: true });
   const file = path.join(artifactDir, name);
-  fs.writeFileSync(file, 'PNG');
+  fs.writeFileSync(file, contents ?? (/\.png$/i.test(name) ? PNG : /\.jpe?g$/i.test(name) ? JPEG : 'not an image'));
   return file;
 }
 
@@ -726,6 +728,17 @@ describe('validateFrames', () => {
     expect(validation.problems).toEqual([]);
   });
 
+  it.each(['jpg', 'jpeg'])('accepts a real .%s frame', extension => {
+    const artifactDir = path.join(makeWorkDir(), 'frames');
+    const file = writeFrameFile(artifactDir, `home-default.${extension}`);
+    writeManifest(artifactDir, [{ file }]);
+
+    const validation = validateFrames(makeResult({ frames: [makeFrame({ file })] }), artifactDir, Date.now());
+
+    expect(validation.checks[0].status).toBe('OK');
+    expect(validation.okFiles).toEqual([file]);
+  });
+
   it.each([
     ['MISSING', (dir: string) => path.join(dir, 'never-written.png')],
     ['EMPTY', (dir: string) => {
@@ -789,9 +802,11 @@ describe('validateFrames', () => {
   it.each([
     ['a capture file', 'home-default-390x844.capture.js'],
     ['a layout file', 'home-default-390x844.layout.json'],
+    ['text with a PNG extension', 'home-default-390x844.png'],
+    ['text with a JPEG extension', 'home-default-390x844.jpg'],
   ])('rejects %s reported as a frame as NOT_IMAGE, and fails the pass', (_label, name) => {
     const artifactDir = path.join(makeWorkDir(), 'frames');
-    const file = writeFrameFile(artifactDir, name);
+    const file = writeFrameFile(artifactDir, name, 'not an image');
     writeManifest(artifactDir, [{ file }]);
     const result = makeResult({ frames: [makeFrame({ file })] });
 
@@ -803,6 +818,17 @@ describe('validateFrames', () => {
     expect(validation.problems).toEqual([`NOT_IMAGE: ${file} (home / default)`]);
     expect(decision.verdict).toBe('FAIL');
     expect(decision.reasons).toEqual([`NOT_IMAGE: ${file} (home / default)`]);
+  });
+
+  it('rejects JPEG bytes renamed to .png', () => {
+    const artifactDir = path.join(makeWorkDir(), 'frames');
+    const file = writeFrameFile(artifactDir, 'home-default-390x844.png', JPEG);
+    writeManifest(artifactDir, [{ file }]);
+
+    const validation = validateFrames(makeResult({ frames: [makeFrame({ file })] }), artifactDir, Date.now());
+
+    expect(validation.checks[0].status).toBe('NOT_IMAGE');
+    expect(validation.okFiles).toEqual([]);
   });
 
   it('treats a directory reported as a frame as MISSING', () => {
