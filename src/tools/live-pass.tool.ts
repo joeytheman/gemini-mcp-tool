@@ -16,11 +16,12 @@ import {
 import { bulletList, section, renderUnparsableEnvelope, formatWorkingTreeSection, failWithWorkingTree } from '../utils/agyReport.js';
 import { isWithin, resolveWorkingDirectory, realpathOfExistingPrefix } from '../utils/fileReferences.js';
 import { snapshotWorkingTree, diffWorkingTree, type WorkingTreeDiff } from '../utils/gitStatusGuard.js';
-import { checkArtifactFile } from '../utils/artifactFile.js';
+import { checkArtifactFile, hasImageSignature, IMAGE_FILE, type ArtifactFileStatus } from '../utils/artifactFile.js';
 import { readCheckout, type Checkout } from '../utils/gitCheckout.js';
 import { formatLayoutEntry, layoutFileName, readLayoutCheck, type LayoutCheck } from '../utils/layoutCheck.js';
+import { buildCaptureScript, parseViewport, saveLayoutFunction } from '../utils/captureScript.js';
 import { countAgyModelSteps, formatModelSteps } from '../utils/agyModelSteps.js';
-import { ERROR_MESSAGES, LAYOUT_CHECK_SNIPPET, LIVE_PASS, MODELS, MODEL_CHOICE_DESCRIPTION, PRINT_TIMEOUT_CEILING_NOTE } from '../constants.js';
+import { ERROR_MESSAGES, LIVE_PASS, MODELS, MODEL_CHOICE_DESCRIPTION, PRINT_TIMEOUT_CEILING_NOTE } from '../constants.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -33,7 +34,7 @@ const FILES_PLACEHOLDER = '{files}';
 export const livePassTargetSchema = z.object({
   screen: z.string().min(1).describe("Screen or route name, e.g. 'orders' or 'settings/profile'."),
   state: z.string().min(1).describe("State to capture, e.g. 'default', 'empty', 'offline', 'error', 'sheet-open'."),
-  viewport: z.string().min(1).describe("Viewport as WxH, e.g. '390x844' or '1280x800'. For the maestro driver, the device form factor."),
+  viewport: z.string().min(1).describe("Viewport as WxH, e.g. '390x844' or '1280x800', which the playwright driver requires. For the maestro driver, the device form factor."),
   expected: z.string().min(1).describe("What this frame must show for a PASS. For an intentional error/empty/offline state, name the reason text and the recovery affordance."),
 });
 
@@ -61,8 +62,19 @@ export const livePassArgsSchema = z.object({
       });
     }
     seen.add(key);
+    if (value.driver === 'playwright' && !parseViewport(target.viewport)) {
+      ctx.addIssue({
+        code: 'custom',
+        message: webViewportError(target.viewport),
+        path: ['targets', index, 'viewport'],
+      });
+    }
   });
 });
+
+function webViewportError(viewport: string): string {
+  return `${ERROR_MESSAGES.LIVE_PASS_WEB_VIEWPORT}. Received '${viewport}'.`;
+}
 
 export type LivePassTarget = z.infer<typeof livePassTargetSchema>;
 export type LivePassArgs = z.infer<typeof livePassArgsSchema>;
@@ -156,27 +168,54 @@ export function prescribedFrameNames(
   return byTarget;
 }
 
-/** The absolute layout-check path for every target, keyed by target, next to its frame. */
-export function prescribedLayoutFiles(targets: LivePassTarget[], artifactDir: string): Map<string, string> {
-  const files = new Map<string, string>();
+export interface TargetFiles {
+  frameName: string;
+  frame: string;
+  capture: string;
+  layout: string;
+}
+
+export function prescribedTargetFiles(targets: LivePassTarget[], artifactDir: string): Map<string, TargetFiles> {
+  const files = new Map<string, TargetFiles>();
   for (const [key, frameName] of prescribedFrameNames(targets)) {
-    files.set(key, path.join(artifactDir, layoutFileName(frameName)));
+    files.set(key, {
+      frameName,
+      frame: path.join(artifactDir, frameName),
+      capture: path.join(artifactDir, frameName.replace(/\.png$/, LIVE_PASS.CAPTURE_FILE_SUFFIX)),
+      layout: path.join(artifactDir, layoutFileName(frameName)),
+    });
   }
   return files;
 }
 
+export function writeCaptureScripts(targets: LivePassTarget[], artifactDir: string): void {
+  const files = prescribedTargetFiles(targets, artifactDir);
+  for (const target of targets) {
+    const viewport = parseViewport(target.viewport);
+    if (!viewport) throw new Error(webViewportError(target.viewport));
+    const { frameName, frame, capture } = files.get(targetKey(target)) as TargetFiles;
+    fs.rmSync(capture, { force: true });
+    fs.writeFileSync(capture, buildCaptureScript({ viewport, frameFile: frame, key: frameName }), { flag: 'wx' });
+  }
+}
+
 function renderTargets(targets: LivePassTarget[], artifactDir: string, driver: 'playwright' | 'maestro'): string {
-  const names = prescribedFrameNames(targets);
-  const layoutFiles = prescribedLayoutFiles(targets, artifactDir);
+  const files = prescribedTargetFiles(targets, artifactDir);
   return targets
     .map((target, index) => {
-      const key = targetKey(target);
+      const { frameName, frame, capture, layout } = files.get(targetKey(target)) as TargetFiles;
       const lines = [
         `${index + 1}. screen: ${target.screen} | state: ${target.state} | viewport: ${target.viewport}`,
         `   expected: ${target.expected}`,
-        `   file: ${path.join(artifactDir, names.get(key) as string)}`,
+        `   file: ${frame}`,
       ];
-      if (driver === 'playwright') lines.push(`   layout: ${layoutFiles.get(key) as string}`);
+      if (driver === 'playwright') {
+        lines.push(
+          `   capture: ${capture}`,
+          `   layout: ${layout}`,
+          `   save layout: ${saveLayoutFunction(frameName)}`
+        );
+      }
       return lines.join('\n');
     })
     .join('\n');
@@ -188,18 +227,12 @@ For each target, in order:
 - Reach it as the "User path" section says.
 - Locate each control cheaply, in this order: a testID the brief names, as target [data-testid="<testID>"]; then browser_find with its visible label; then browser_snapshot with a target and a small depth scoped to that region. Never take a full-page snapshot just to look around, and never copy a snapshot or accessibility tree into your answer.
 - Native dialogs such as window.confirm and window.alert block the page: accept or dismiss each with browser_handle_dialog right after the click that opened it.
-- Wait until the marker the brief names for that state is present. Never screenshot a page that still shows a spinner or skeleton when a content state was requested.
-- browser_resize to the target's viewport.
-- browser_take_screenshot with filename set to the exact absolute path printed as "file:" for that target below. Never invent a filename, never reuse another target's file, and never use fullPage.
-- For a scrolling screen: browser_resize to (width, 4000), then browser_evaluate this snippet to measure the real content height, then browser_resize to (width, measured) and shoot:
-  () => { const skip = (el) => el.closest('[aria-hidden="true"]') || el.closest('[role="tab"]'); let bottom = 0; for (const el of document.querySelectorAll('body *')) { if (skip(el)) continue; const hasText = Array.from(el.childNodes).some(n => n.nodeType === 3 && n.textContent.trim()); if (!hasText) continue; bottom = Math.max(bottom, el.getBoundingClientRect().bottom + window.scrollY); } return Math.ceil(bottom + 24); }
-- Right after each screenshot, run the layout check: browser_evaluate with function set to the layout snippet below, copied verbatim, and filename set to the exact absolute path printed as "layout:" for that target. Do not open that file or report on it: the caller reads it.
-- Capture centred/terminal states and sheets at 390x844 and again at 320x568 when the targets ask for both.
+- Wait until the marker the brief names for that state is present. Never capture a page that still shows a spinner or skeleton when a content state was requested.
+- Capture it: browser_run_code_unsafe with filename set to the exact absolute path printed as "capture:" for that target below. Never pass code, never write, edit or read a capture file, and never reuse another target's file. The capture sets the target's viewport and grows a scrolling screen taller, a few times at most and up to ${LIVE_PASS.CAPTURE_MAX_HEIGHT} px, until its scroll area fits; a screen that still scrolls after that is shot as it stands. It saves the screenshot to that target's "file:" path, measures the layout, and restores the viewport. It answers "saved <file> at <width>x<height>"; an added "; layout not measured: <error>" or "; viewport not restored: <error>" still saved the frame.
+- Right after it, save the layout check: browser_evaluate with function set to the "save layout:" function printed for that target, copied verbatim, and filename set to the exact absolute path printed as "layout:" for that target. Do not open that file or report on it: the caller reads it.
+- If a capture returns an error, add the target to "skipped" with the error text. Never fall back to browser_take_screenshot.
 - Scroll a virtualized list to its end before asserting that something is absent.
-- browser_evaluate runs only the two snippets printed here. Never use it to click, type, navigate, or set storage, cookies or app state.
-
-Layout snippet:
-${LAYOUT_CHECK_SNIPPET}`;
+- browser_evaluate runs only the "save layout:" functions and browser_run_code_unsafe only the "capture:" files. Neither is used to click, type, navigate, or set storage, cookies or app state.`;
 
 const PLAYWRIGHT_CHEAT_SHEET = `## Tool cheat sheet (the installed parameters: never read tool schemas or Playwright source)
 "target" is a ref from browser_find or browser_snapshot (such as e12) or a unique selector such as [data-testid="save"].
@@ -213,9 +246,8 @@ const PLAYWRIGHT_CHEAT_SHEET = `## Tool cheat sheet (the installed parameters: n
 - browser_wait_for {text? | textGone? | time?}: time is in seconds, at most 30.
 - browser_find {text | regex}: searches the accessibility snapshot and returns the matching nodes with their refs.
 - browser_snapshot {target?, depth?, boxes?}
-- browser_resize {width, height}
-- browser_take_screenshot {filename, fullPage?, scale?}: filename is absolute.
-- browser_evaluate {function, target?, filename?}: with filename, the return value is written there as JSON instead of returned to you.`;
+- browser_run_code_unsafe {filename}: filename is absolute.
+- browser_evaluate {function, filename}: the return value is written to filename as JSON instead of returned to you.`;
 
 const MAESTRO_PROCEDURE = `Driver: the "${LIVE_PASS.MAESTRO_MCP_NAME}" MCP server.
 For each target, in order:
@@ -325,7 +357,7 @@ ${brief}`;
 
 // --------------------------------------------------------------- validation
 
-export type FrameStatus = 'OK' | 'MISSING' | 'EMPTY' | 'STALE' | 'OUTSIDE' | 'DUPLICATE';
+export type FrameStatus = ArtifactFileStatus | 'DUPLICATE' | 'NOT_IMAGE';
 
 export interface FrameCheck {
   file: string;
@@ -388,7 +420,7 @@ function readManifestProblems(artifactDir: string, frameCount: number, runStartM
 function listCaptures(artifactDir: string): string[] {
   try {
     return fs.readdirSync(artifactDir)
-      .filter(name => /\.(png|jpe?g)$/i.test(name))
+      .filter(name => IMAGE_FILE.test(name))
       .map(name => path.join(artifactDir, name));
   } catch {
     return [];
@@ -411,9 +443,11 @@ export function validateFrames(
     const expectedName = prescribed.get(targetKey(frame));
     // A second frame pointing at the same file is one screenshot answering two
     // targets — no evidence for either, however good the picture is.
-    const status: FrameStatus = claimedBy.has(absFile)
-      ? 'DUPLICATE'
-      : checkArtifactFile(absFile, artifactDir, runStartMs);
+    const fileStatus = checkArtifactFile(absFile, artifactDir, runStartMs);
+    const status: FrameStatus = claimedBy.has(absFile) ? 'DUPLICATE'
+      : !IMAGE_FILE.test(absFile) ? 'NOT_IMAGE'
+      : fileStatus !== 'OK' ? fileStatus
+      : hasImageSignature(absFile) ? 'OK' : 'NOT_IMAGE';
     claimedBy.add(absFile);
 
     const misnamed = Boolean(expectedName) && path.basename(absFile) !== expectedName;
@@ -583,21 +617,16 @@ export interface TargetLayoutCheck {
   check: LayoutCheck;
 }
 
-function viewportWidth(viewport: string): number | undefined {
-  const match = /^\s*(\d+)\s*x\s*\d+\s*$/i.exec(viewport);
-  return match ? Number(match[1]) : undefined;
-}
-
 /** Each web target's layout file, read from its prescribed path. Never throws. */
 export function readLayoutChecks(
   targets: LivePassTarget[],
   artifactDir: string,
   runStartMs: number
 ): TargetLayoutCheck[] {
-  const files = prescribedLayoutFiles(targets, artifactDir);
+  const files = prescribedTargetFiles(targets, artifactDir);
   return targets.map(target => ({
     target,
-    check: readLayoutCheck(files.get(targetKey(target)) as string, artifactDir, runStartMs, viewportWidth(target.viewport)),
+    check: readLayoutCheck((files.get(targetKey(target)) as TargetFiles).layout, artifactDir, runStartMs, parseViewport(target.viewport)?.width),
   }));
 }
 
@@ -742,6 +771,7 @@ export const livePassTool: UnifiedTool = {
     const workingDirectory = resolveWorkingDirectory(input.workingDirectory);
     const artifactDir = resolveArtifactDir(workingDirectory, input.artifactDir);
     fs.mkdirSync(artifactDir, { recursive: true });
+    if (input.driver === 'playwright') writeCaptureScripts(input.targets, artifactDir);
 
     const runStartMs = Date.now();
     const before = await snapshotWorkingTree(workingDirectory);

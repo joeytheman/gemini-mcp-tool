@@ -32,11 +32,13 @@ import { makeTempDir, cleanupTempDirs } from './utils/test-helpers.js';
 // ------------------------------------------------------------------ helpers
 
 const makeWorkDir = () => makeTempDir('screen-review');
+const PNG = fs.readFileSync(new URL('./fixtures/images/pixel.png', import.meta.url));
+const JPEG = fs.readFileSync(new URL('./fixtures/images/pixel.jpg', import.meta.url));
 
-function writeFile(dir: string, name: string, contents = 'x'): string {
+function writeFile(dir: string, name: string, contents?: string | Buffer): string {
   const file = path.join(dir, name);
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, contents);
+  fs.writeFileSync(file, contents ?? (/\.png$/i.test(name) ? PNG : /\.jpe?g$/i.test(name) ? JPEG : 'x'));
   return file;
 }
 
@@ -146,6 +148,24 @@ describe('screenReviewArgsSchema', () => {
     expect(() => screenReviewArgsSchema.parse({
       mode: 'review', instructions: 'judge these', workingDirectory: workDir, images: [notAnImage],
     })).toThrow(/PNG or JPEG/);
+  });
+
+  it('rejects text disguised as a PNG in review mode', () => {
+    const workDir = makeWorkDir();
+    const notAnImage = writeFile(workDir, 'home.png', 'not an image');
+
+    expect(() => screenReviewArgsSchema.parse({
+      mode: 'review', instructions: 'judge these', workingDirectory: workDir, images: [notAnImage],
+    })).toThrow(/PNG or JPEG/);
+  });
+
+  it('accepts a real JPEG in review mode', () => {
+    const workDir = makeWorkDir();
+    const image = writeFile(workDir, 'home.jpg');
+
+    expect(screenReviewArgsSchema.parse({
+      mode: 'review', instructions: 'judge these', workingDirectory: workDir, images: [image],
+    }).images).toEqual([image]);
   });
 
   it('rejects a routeFile in review mode and images in plan mode', () => {

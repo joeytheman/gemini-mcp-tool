@@ -15,10 +15,10 @@ import { bulletList, section, renderUnparsableEnvelope, formatWorkingTreeSection
 import { isWithin, resolveWorkingDirectory, realpathOfExistingPrefix } from '../utils/fileReferences.js';
 import { snapshotWorkingTree, diffWorkingTree, type WorkingTreeDiff } from '../utils/gitStatusGuard.js';
 import { resolveMergeBase } from '../utils/gitCheckout.js';
+import { hasImageSignature } from '../utils/artifactFile.js';
 import { countAgyModelSteps, formatModelSteps } from '../utils/agyModelSteps.js';
 import { ERROR_MESSAGES, LIVE_PASS, MODELS, MODEL_CHOICE_DESCRIPTION, PRINT_TIMEOUT_CEILING_NOTE } from '../constants.js';
 
-const IMAGE_EXTENSIONS = /\.(png|jpe?g)$/i;
 const WHITESPACE = /\s/;
 
 // ---------------------------------------------------------------- arguments
@@ -60,7 +60,7 @@ export const screenReviewArgsSchema = z.object({
         ctx.addIssue({ code: 'custom', message: `${ERROR_MESSAGES.UNREFERENCEABLE_PATH}: ${image}`, path: ['images', index] });
       } else if (!fileExists(image)) {
         ctx.addIssue({ code: 'custom', message: `${ERROR_MESSAGES.SCREEN_REVIEW_IMAGE_MISSING}: ${image}`, path: ['images', index] });
-      } else if (!IMAGE_EXTENSIONS.test(image)) {
+      } else if (!hasImageSignature(image)) {
         ctx.addIssue({ code: 'custom', message: `image must be a PNG or JPEG: ${image}`, path: ['images', index] });
       }
     });
