@@ -20,6 +20,7 @@
 - `screen-review` bounds Gemini's reads to the evidence its checklist needs (the route each image shows and what it renders, changed files, producer lines, rules, READMEs and boards), and bans running tests or npm and reading `node_modules` or release notes. New `baseRef` (review mode) is resolved in code to its merge base with HEAD; Gemini may run read-only `git diff <merge-base>...HEAD` and `git show <merge-base>:<path>`. Without it Gemini runs no git.
 - Package and MCP server versions synchronized at `2.3.0`.
 - The minimum supported Node.js version is 20.12.0, matching the installed runtime dependencies.
+- Raised the minimum `@modelcontextprotocol/sdk` and `zod` versions to include their security fixes, updated `lru-cache` within its existing major version, refreshed transitive dependencies, removed unused `chalk`, `d3-shape`, `inquirer`, and `@types/inquirer` packages, and moved docs-only `prismjs` to development dependencies.
 
 ## [2.2.0]
 - Default model for `ask-gemini` and `brainstorm` changed to `Gemini 4 Argon (High)`; `live-pass` and `screen-review` continue to default to `Gemini 3.8 Flash (Medium)`.
