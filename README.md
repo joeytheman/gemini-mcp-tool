@@ -60,7 +60,7 @@ Version 2.0 moves the Gemini backend from the retired Gemini CLI/API path to Goo
 
 Before using this tool, ensure you have:
 
-1. **[Node.js](https://nodejs.org/)** (v18.0.0 or higher)
+1. **[Node.js](https://nodejs.org/)** (v20.12.0 or higher)
 2. **Antigravity CLI (`agy`)** installed and configured
 
 Verify `agy` before adding the MCP server:

@@ -4,7 +4,7 @@ Multiple ways to install Gemini MCP Tool, depending on your needs.
 
 ## Prerequisites
 
-- Node.js v18.0.0 or higher
+- Node.js v20.12.0 or higher
 - Claude Desktop or Claude Code with MCP support
 - Antigravity CLI (`agy`) installed and configured
 
@@ -19,6 +19,18 @@ agy models
 `ask-gemini` and `brainstorm` default to `Gemini 4 Argon (High)` (verified with agy 1.3.4). Google currently lists Argon access in Antigravity for Google AI Ultra and Enterprise accounts; see [model availability](https://antigravity.google/docs/models/). If Argon is absent from `agy models`, update Antigravity CLI and check your account's access, or explicitly pass an available model such as `model: "Gemini 3.8 Flash (High)"`. The MCP server does not automatically fall back.
 
 `live-pass` and `screen-review` continue to default to `Gemini 3.8 Flash (Medium)`.
+
+## Web live pass setup
+
+For `live-pass` with `driver:playwright`, register Playwright MCP with Antigravity CLI. Use a version with `browser_run_code_unsafe` (tested with `@playwright/mcp` 0.0.84):
+
+```bash
+agy mcp add playwright -- npx -y @playwright/mcp@latest --browser chromium --headless --isolated \
+  --codegen none --allow-unrestricted-file-access
+agy mcp list
+```
+
+Update an existing Playwright registration to include both flags. `--allow-unrestricted-file-access` lets the capture read its worktree-local script and save the layout report; `--codegen none` prevents Playwright from echoing that script into Gemini's history. Playwright targets use a `WxH` viewport, such as `390x844`. Add `.live-pass/` and `.playwright-mcp/` to the app worktree's `.gitignore`.
 
 ## Method 1: NPX (Recommended)
 

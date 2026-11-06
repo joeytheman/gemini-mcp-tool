@@ -31,7 +31,7 @@
 
 Before installing, ensure you have:
 
-- **[Node.js](https://nodejs.org/)** v18.0.0 or higher
+- **[Node.js](https://nodejs.org/)** v20.12.0 or higher
 - **Antigravity CLI (`agy`)** installed and configured on your system
 - **[Claude Desktop](https://claude.ai/download)** or **[Claude Code](https://www.anthropic.com/claude-code)** with MCP support
 
