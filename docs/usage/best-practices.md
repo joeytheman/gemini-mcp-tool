@@ -50,14 +50,15 @@ Include configuration with implementation:
 ## Token Management
 
 ### Gemini Model Selection
-- **Coding, complex analysis, and brainstorming (default)**: Use `Gemini 4 Argon (High)` for `ask-gemini` and `brainstorm`
-- **Other Argon reasoning tiers**: Choose `Gemini 4 Argon (Low)` or `Gemini 4 Argon (Medium)` explicitly
+- **Coding, complex analysis, and brainstorming (default)**: Use `Gemini 4 Carbon (High)` for `ask-gemini` and `brainstorm`
+- **Other Carbon reasoning tiers**: Choose `Gemini 4 Carbon (Low)` or `Gemini 4 Carbon (Medium)` explicitly
+- **Gemini 4 Argon**: Choose `Gemini 4 Argon (Low)`, `(Medium)` or `(High)` explicitly
 - **Live UI passes and screen reviews (default)**: Keep `Gemini 3.8 Flash (Medium)` for `live-pass` and `screen-review`
 - **Balanced general work**: Use `Gemini 3.8 Flash (Medium)`
 - **Quick tasks**: Use `Gemini 3.8 Flash (Low)`
-- **Explicit alternatives**: Use `Gemini 3.8 Flash (High)` when Argon is unavailable, or a Pro tier when listed by `agy models`
+- **Explicit alternatives**: Use `Gemini 4 Argon (High)` or `Gemini 3.8 Flash (High)` when Carbon is unavailable, or a Pro tier when listed by `agy models`
 
-Model availability depends on your CLI version and account. Argon currently requires Google AI Ultra or Enterprise access in Antigravity; see [model availability](https://antigravity.google/docs/models/). Check `agy models` and pass an available model explicitly; the server does not automatically fall back.
+Model availability depends on your CLI version and account. Carbon currently requires Google AI Ultra or Enterprise access in Antigravity (Argon is also on Google AI Pro); see [model availability](https://antigravity.google/docs/models/). Check `agy models` and pass an available model explicitly; the server does not automatically fall back.
 
 ### Efficient File Inclusion
 ```bash

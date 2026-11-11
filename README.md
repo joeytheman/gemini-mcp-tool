@@ -28,6 +28,10 @@ This is a simple Model Context Protocol (MCP) server that lets AI assistants ask
 
 **Goal**: Use Gemini's analysis capabilities directly from Codex or Claude Code for reviews, critiques, and large-file questions.
 
+## What's New in 2.4
+
+- **Gemini 4 Carbon support** — `ask-gemini` and `brainstorm` now default to **Gemini 4 Carbon (High)**. Carbon Low and Medium, and every Gemini 4 Argon tier, remain available as explicit overrides when listed by `agy models`. `live-pass` and `screen-review` continue to default to **Gemini 3.8 Flash (Medium)**.
+
 ## What's New in 2.2
 
 - **Gemini 4 Argon support** — `ask-gemini` and `brainstorm` now default to **Gemini 4 Argon (High)**. Argon Low and Medium are available as explicit overrides when listed by `agy models`. `live-pass` and `screen-review` continue to default to **Gemini 3.8 Flash (Medium)**.
@@ -71,7 +75,7 @@ agy install
 agy models
 ```
 
-The `ask-gemini` and `brainstorm` default requires `Gemini 4 Argon (High)` to appear in `agy models` (verified with agy 1.3.4). Google currently lists Argon access in Antigravity for **Google AI Ultra and Enterprise** accounts; see [model availability](https://antigravity.google/docs/models/). If Argon is missing, update Antigravity CLI and check your account's access. You can explicitly select an available Flash tier, such as `model: "Gemini 3.8 Flash (High)"`. The MCP server does not automatically fall back. `live-pass` and `screen-review` continue to require `Gemini 3.8 Flash (Medium)` for their default requests.
+The `ask-gemini` and `brainstorm` default requires `Gemini 4 Carbon (High)` to appear in `agy models` (verified with agy 1.5.5). Google currently lists Carbon access in Antigravity for **Google AI Ultra and Enterprise** accounts (Argon is also on Google AI Pro); see [model availability](https://antigravity.google/docs/models/). If Carbon is missing, update Antigravity CLI and check your account's access. You can explicitly select another available model, such as `model: "Gemini 4 Argon (High)"` or `model: "Gemini 3.8 Flash (High)"`. The MCP server does not automatically fall back. `live-pass` and `screen-review` continue to require `Gemini 3.8 Flash (Medium)` for their default requests.
 
 
 ### One-Line Setup
@@ -216,7 +220,7 @@ These tools are designed to be used by the AI assistant.
 
 - **`ask-gemini`**: Ask Gemini through Antigravity CLI (`agy`) for plan review, implementation critique, code review, architecture feedback, debugging, and tradeoff analysis.
   - **`prompt`** (required): The analysis request. Use the `@` syntax to include file or directory references (e.g., `@src/main.js review this implementation`) or ask general questions.
-  - **`model`** (optional): The Antigravity model to use. Defaults to `Gemini 4 Argon (High)`. Other verified options include `Gemini 4 Argon (Low)`, `Gemini 4 Argon (Medium)`, and `Gemini 3.8 Flash (Low/Medium/High)` (use the exact tier name, such as `Gemini 3.8 Flash (High)`). Availability depends on your CLI version and account; check `agy models`. Some accounts also expose `Gemini 3.1 Pro (Low)` and `Gemini 3.1 Pro (High)`.
+  - **`model`** (optional): The Antigravity model to use. Defaults to `Gemini 4 Carbon (High)`. Other verified options include `Gemini 4 Carbon (Low)`, `Gemini 4 Carbon (Medium)`, `Gemini 4 Argon (Low/Medium/High)`, and `Gemini 3.8 Flash (Low/Medium/High)` (use the exact tier name, such as `Gemini 3.8 Flash (High)`). Availability depends on your CLI version and account; check `agy models`. Some accounts also expose `Gemini 3.1 Pro (Low)` and `Gemini 3.1 Pro (High)`.
   - **`sandbox`** (optional): Set to `true` to pass `--sandbox`.
   - **`changeMode`** (optional): Enable structured change mode for edit suggestions that Claude can apply directly.
   - **`yolo`** (optional): Pass `--dangerously-skip-permissions`. Use with caution.
@@ -257,7 +261,7 @@ These tools are designed to be used by the AI assistant.
 
 - **`brainstorm`**: Generate creative ideas with structured methodologies and domain context.
   - **`prompt`** (required): Brainstorming challenge or question to explore.
-  - **`model`** (optional): The Antigravity model to use. Defaults to `Gemini 4 Argon (High)`. Pass an exact model listed by `agy models` to override it.
+  - **`model`** (optional): The Antigravity model to use. Defaults to `Gemini 4 Carbon (High)`. Pass an exact model listed by `agy models` to override it.
   - **`methodology`** (optional): Framework to use: `divergent`, `convergent`, `scamper`, `design-thinking`, `lateral`, or `auto` (default).
   - **`domain`** (optional): Domain context (e.g., 'software', 'business', 'creative', 'research').
   - **`constraints`** (optional): Known limitations or requirements.

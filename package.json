@@ -1,6 +1,6 @@
 {
   "name": "@joeytheman/gemini-mcp-tool",
-  "version": "2.3.1",
+  "version": "2.4.0",
   "description": "MCP server for asking Gemini through Antigravity CLI (agy)",
   "type": "module",
   "main": "dist/index.js",
