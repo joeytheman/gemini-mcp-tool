@@ -16,7 +16,7 @@ agy install
 agy models
 ```
 
-`ask-gemini` and `brainstorm` default to `Gemini 4 Argon (High)` (verified with agy 1.3.4). Google currently lists Argon access in Antigravity for Google AI Ultra and Enterprise accounts; see [model availability](https://antigravity.google/docs/models/). If Argon is absent from `agy models`, update Antigravity CLI and check your account's access, or explicitly pass an available model such as `model: "Gemini 3.8 Flash (High)"`. The MCP server does not automatically fall back.
+`ask-gemini` and `brainstorm` default to `Gemini 4 Carbon (High)` (verified with agy 1.5.5). Google currently lists Carbon access in Antigravity for Google AI Ultra and Enterprise accounts (Argon is also on Google AI Pro); see [model availability](https://antigravity.google/docs/models/). If Carbon is absent from `agy models`, update Antigravity CLI and check your account's access, or explicitly pass an available model such as `model: "Gemini 4 Argon (High)"` or `model: "Gemini 3.8 Flash (High)"`. The MCP server does not automatically fall back.
 
 `live-pass` and `screen-review` continue to default to `Gemini 3.8 Flash (Medium)`.
 

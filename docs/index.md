@@ -34,7 +34,7 @@ features:
     details: Gemini MCP Tool uses your Antigravity CLI setup.
   - icon: 🚦
     title: Model Selection
-    details: Analysis and brainstorming default to Gemini 4 Argon High. Live passes and screen reviews keep Gemini 3.8 Flash Medium. Choose another available tier per request.
+    details: Analysis and brainstorming default to Gemini 4 Carbon High. Live passes and screen reviews keep Gemini 3.8 Flash Medium. Choose another available tier per request.
 ---
 
 <div class="explore-hint" style="text-align: center; margin: 32px 0 48px; position: relative;">

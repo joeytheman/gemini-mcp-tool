@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+## [2.4.0]
+- Default model for `ask-gemini` and `brainstorm` changed to `Gemini 4 Carbon (High)`; `live-pass` and `screen-review` continue to default to `Gemini 3.8 Flash (Medium)`.
+- Added Gemini 4 Carbon Low, Medium, and High tiers to the advertised model choices. Every Gemini 4 Argon tier remains supported as an explicit override, with no automatic fallback. Setup guidance now reflects Google's listing: Carbon in Antigravity for Google AI Ultra and Enterprise accounts, Argon also on Google AI Pro.
+- Package and MCP server versions synchronized at `2.4.0`.
+
 ## [2.3.1]
 - Removed the unused `archiver` development dependency and its transitive packages, updated `tsx`, and pinned patched Vite and KaTeX versions for the docs toolchain. The full `npm audit` now reports zero vulnerabilities.
 - Prebundled Mermaid's FastDom modules for the Vite 6 docs dev server and added a docs build to Node 20 CI.

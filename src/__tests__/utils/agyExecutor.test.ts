@@ -79,7 +79,7 @@ describe('executeAgyCLI', () => {
     it('should use agy with the default Gemini model and print mode', async () => {
       await executeAgyCLI('test', {});
 
-      expect(MODELS.DEFAULT).toBe('Gemini 4 Argon (High)');
+      expect(MODELS.DEFAULT).toBe('Gemini 4 Carbon (High)');
       expect(mockExecuteCommand).toHaveBeenCalledWith(
         CLI.COMMANDS.AGY,
         [CLI.FLAGS.MODEL, MODELS.DEFAULT, CLI.FLAGS.OUTPUT_FORMAT, 'json', CLI.FLAGS.PRINT, 'test'],
@@ -90,10 +90,14 @@ describe('executeAgyCLI', () => {
     });
 
     it.each([
+      'Gemini 4 Carbon (Low)',
+      'Gemini 4 Carbon (Medium)',
+      'Gemini 4 Carbon (High)',
       'Gemini 4 Argon (Low)',
       'Gemini 4 Argon (Medium)',
       'Gemini 4 Argon (High)',
       'Gemini 3.8 Flash (Medium)',
+      'gemini-4-carbon-medium',
       'gemini-4-argon-medium',
     ])('should pass the explicit model %s unchanged', async (model) => {
       await executeAgyCLI('test', { model });
@@ -235,10 +239,10 @@ describe('executeAgyCLI', () => {
 
   describe('no fallback behavior', () => {
     it('should surface an unavailable default model without retrying', async () => {
-      mockExecuteCommand.mockRejectedValueOnce(new Error('invalid model selection: Gemini 4 Argon (High)'));
+      mockExecuteCommand.mockRejectedValueOnce(new Error('invalid model selection: Gemini 4 Carbon (High)'));
 
       await expect(executeAgyCLI('test', {}))
-        .rejects.toThrow('invalid model selection: Gemini 4 Argon (High)');
+        .rejects.toThrow('invalid model selection: Gemini 4 Carbon (High)');
 
       expect(mockExecuteCommand).toHaveBeenCalledTimes(1);
     });
@@ -811,11 +815,11 @@ describe('executeAgyJson', () => {
     expect(envelope.structured_output).toEqual({ ok: true });
   });
 
-  it('uses Argon High when the model is omitted in json mode', async () => {
+  it('uses Carbon High when the model is omitted in json mode', async () => {
     await executeAgyJson('test', {});
 
     const args = mockExecuteCommand.mock.calls[0][1];
-    expect(args.slice(0, 2)).toEqual([CLI.FLAGS.MODEL, 'Gemini 4 Argon (High)']);
+    expect(args.slice(0, 2)).toEqual([CLI.FLAGS.MODEL, 'Gemini 4 Carbon (High)']);
     expect(args).toContain(CLI.FLAGS.OUTPUT_FORMAT);
   });
 });

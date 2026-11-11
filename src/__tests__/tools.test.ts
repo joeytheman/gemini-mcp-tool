@@ -216,8 +216,8 @@ describe('Tool Registry', () => {
       const tools = getToolDefinitions();
 
       for (const [toolName, defaultModel] of [
-        ['ask-gemini', 'Gemini 4 Argon (High)'],
-        ['brainstorm', 'Gemini 4 Argon (High)'],
+        ['ask-gemini', 'Gemini 4 Carbon (High)'],
+        ['brainstorm', 'Gemini 4 Carbon (High)'],
         ['live-pass', 'Gemini 3.8 Flash (Medium)'],
         ['screen-review', 'Gemini 3.8 Flash (Medium)'],
       ]) {
@@ -229,6 +229,9 @@ describe('Tool Registry', () => {
         if (toolName === 'live-pass' || toolName === 'screen-review') {
           expect(modelSchema?.default).toBe(defaultModel);
         }
+        expect(modelSchema?.description).toContain('Gemini 4 Carbon (Low)');
+        expect(modelSchema?.description).toContain('Gemini 4 Carbon (Medium)');
+        expect(modelSchema?.description).toContain('Gemini 4 Carbon (High)');
         expect(modelSchema?.description).toContain('Gemini 4 Argon (Low)');
         expect(modelSchema?.description).toContain('Gemini 4 Argon (Medium)');
         expect(modelSchema?.description).toContain('Gemini 4 Argon (High)');
